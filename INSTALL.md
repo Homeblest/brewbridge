@@ -2,7 +2,7 @@
 
 ## The 5-minute install (MSI — when released)
 
-1. Download `brewbridge-<version>.msi` from [Releases](https://github.com/hjaltileifsson/brewbridge/releases).
+1. Download `brewbridge-<version>.msi` from [Releases](https://github.com/Homeblest/brewbridge/releases).
 2. Double-click. Accept the defaults.
 3. The installer registers the `brewis://` URL handler, drops the BeerSmith report template into place, adds the `Brew.is einfaldur` mash profile and `Reykjavík tap` water profile to your BeerSmith library, and pins **brewbridge tray** to your Start Menu.
 4. Open BeerSmith → **Tools → Options → Reports → Add Report…** → browse to `%APPDATA%\BeerSmith4\Reports\BrewIsOrder.htm` and import it as type **Recipe**. (BeerSmith requires this go through its own UI.)
@@ -24,7 +24,7 @@ Right-click the tray icon → **Synca núna** to do your first catalog sync.
 
 ```powershell
 # Clone and install in editable mode
-git clone https://github.com/hjaltileifsson/brewbridge.git
+git clone https://github.com/Homeblest/brewbridge.git
 cd brewbridge
 pip install -e .
 

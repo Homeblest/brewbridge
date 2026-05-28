@@ -40,8 +40,8 @@ build = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/hjaltileifsson/brewbridge"
-Issues = "https://github.com/hjaltileifsson/brewbridge/issues"
+Homepage = "https://github.com/Homeblest/brewbridge"
+Issues = "https://github.com/Homeblest/brewbridge/issues"
 
 [project.scripts]
 brewbridge = "brewbridge.__main__:main"

@@ -22,12 +22,12 @@ Sync **brew.is** in-stock brewing ingredients into **BeerSmith 4**, import the b
 
 ## Quick start
 
-**Easiest** (Windows, non-Python users): download the MSI installer from [releases](https://github.com/hjaltileifsson/brewbridge/releases) and run it. The installer handles Python, the Chromium browser, the `brewis://` URL handler, and the BeerSmith report template.
+**Easiest** (Windows, non-Python users): download the MSI installer from [releases](https://github.com/Homeblest/brewbridge/releases) and run it. The installer handles Python, the Chromium browser, the `brewis://` URL handler, and the BeerSmith report template.
 
 **From source** (developers):
 
 ```powershell
-git clone https://github.com/hjaltileifsson/brewbridge.git
+git clone https://github.com/Homeblest/brewbridge.git
 cd brewbridge
 pip install -e .
 playwright install chromium
