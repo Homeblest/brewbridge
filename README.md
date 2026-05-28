@@ -4,7 +4,7 @@ Sync **brew.is** in-stock brewing ingredients into **BeerSmith 4**, import the b
 
 > An open-source bridge between [brew.is](https://www.brew.is/) (Iceland's homebrew shop) and [BeerSmith 4](https://www.beersmith.com/) on Windows.
 
-![brewbridge tray icon](docs/screenshots/tray.png)
+<img src="docs/screenshots/tray.png" alt="brewbridge tray icon" width="96">
 
 ---
 
