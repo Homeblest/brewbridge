@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+.eggs/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.spec
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# brewbridge user data (per-machine, don't track)
+orders/
+backups/
+*.log
+*_report.txt
+brewis_catalog.json
+specs_reference.json
+
+# Playwright browsers (huge)
+ms-playwright/
+
+# PyInstaller / WiX intermediate
+*.wxsobj
+*.wixpdb
