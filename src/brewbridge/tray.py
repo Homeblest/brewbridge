@@ -66,22 +66,36 @@ def _record_sync(success: bool):
     )
 
 
-def _make_icon_image(state: str):
-    """Draw a 64×64 icon in-memory: brewbridge "B" with a state-coloured dot."""
+def _make_icon_image(state: str, size: int = 64):
+    """Draw the brewbridge "B" icon at ``size`` px square with a state-coloured dot.
+
+    Scales every pixel offset off ``size`` so the same logic produces both the
+    runtime 64×64 tray icon and the larger PNG used in docs/screenshots/.
+    """
     try:
         from PIL import Image, ImageDraw, ImageFont
     except ImportError:
         return None
     bg = {"ok": (40, 167, 69), "stale": (240, 192, 64),
           "failed": (200, 0, 0), "never": (140, 140, 140)}.get(state, (140, 140, 140))
-    img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    d.ellipse([4, 4, 60, 60], fill=bg, outline=(0, 0, 0, 80), width=1)
+    pad = max(1, size // 16)         # 4 at 64 px
+    stroke = max(1, size // 64)      # 1 at 64 px, 4 at 256 px
+    d.ellipse([pad, pad, size - pad, size - pad],
+              fill=bg, outline=(0, 0, 0, 80), width=stroke)
+
+    # Glyph centred on the circle. textbbox gives the actual painted extents
+    # (cap-height, not the full em box), so centring on its midpoint puts the
+    # visual mass of "B" at the disc's centre.
+    font_px = int(size * 0.56)
     try:
-        font = ImageFont.truetype("seguibl.ttf", 36)
+        font = ImageFont.truetype("seguibl.ttf", font_px)
     except (OSError, IOError):
         font = ImageFont.load_default()
-    d.text((20, 10), "B", fill="white", font=font)
+    cx = cy = size / 2
+    l, t, r, b = d.textbbox((0, 0), "B", font=font)
+    d.text((cx - (l + r) / 2, cy - (t + b) / 2), "B", fill="white", font=font)
     return img
 
 
