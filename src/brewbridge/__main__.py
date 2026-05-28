@@ -154,8 +154,25 @@ def cmd_audit(args):
 
 
 def cmd_install(args):
-    print("Setup wizard not yet implemented in this build — sorry!")
-    print("For now: install_protocol.ps1 + manual report-template import.")
+    from . import setup as bb_setup
+    print("brewbridge setup")
+    try:
+        s = bb_setup.install_all(skip_db=args.skip_db)
+    except RuntimeError as e:
+        sys.exit(f"  install failed: {e}")
+    print(f"  brewis:// handler   -> {s['protocol_command']}")
+    print(f"  Report template     -> {s['report_template']}")
+    if "mash_profile_added" in s:
+        print(f"  Brew.is einfaldur (M_MASH)   -> "
+              f"{'added' if s['mash_profile_added'] else 'already present'}")
+        print(f"  Reykjavík tap (M_WATER)      -> "
+              f"{'added' if s['water_profile_added'] else 'already present'}")
+    print()
+    print("Next steps:")
+    print("  1. Open BeerSmith -> Tools -> Options -> Reports -> Add Report.")
+    print(f"     Browse to {s['report_template']} and import as type 'Recipe'.")
+    print("  2. Run `brewbridge sync` to populate the brew.is ingredient library.")
+    print("  3. Run `brewbridge tray` (or pin a shortcut to it) for everyday use.")
 
 
 def cmd_tray(args):
@@ -196,7 +213,10 @@ def main(argv: list[str] | None = None) -> int:
                    help="apply auto-fixes (yeast dates + mash rebuild)")
     a.set_defaults(func=cmd_audit)
 
-    i = sub.add_parser("install", help="one-time setup (TODO)")
+    i = sub.add_parser("install", help="register URL protocol + install profiles")
+    i.add_argument("--skip-db", action="store_true",
+                   help="skip the M_MASH / M_WATER inserts (BeerSmith.sqlite "
+                        "is locked / you've already done them)")
     i.set_defaults(func=cmd_install)
 
     t = sub.add_parser("tray", help="launch the system-tray icon")
