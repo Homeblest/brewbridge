@@ -85,17 +85,26 @@ def _make_icon_image(state: str, size: int = 64):
     d.ellipse([pad, pad, size - pad, size - pad],
               fill=bg, outline=(0, 0, 0, 80), width=stroke)
 
-    # Glyph centred on the circle. textbbox gives the actual painted extents
-    # (cap-height, not the full em box), so centring on its midpoint puts the
-    # visual mass of "B" at the disc's centre.
+    # Glyph centred on the circle. We can't trust font.getbbox / textbbox
+    # for this — fonts report an em-square bbox with left-side bearing that
+    # the painted ink doesn't fill. Centring on that reported bbox puts the
+    # *bbox* at the disc centre but leaves the visible ink off-centre by the
+    # bearing offset. So instead: render the glyph to a temp canvas, crop to
+    # the actual ink bbox, then paste centred. Now the ink itself is centred,
+    # regardless of font metrics.
     font_px = int(size * 0.56)
     try:
         font = ImageFont.truetype("seguibl.ttf", font_px)
     except (OSError, IOError):
         font = ImageFont.load_default()
-    cx = cy = size / 2
-    l, t, r, b = d.textbbox((0, 0), "B", font=font)
-    d.text((cx - (l + r) / 2, cy - (t + b) / 2), "B", fill="white", font=font)
+    pad = font_px
+    temp = Image.new("RGBA", (font_px * 3, font_px * 3), (0, 0, 0, 0))
+    ImageDraw.Draw(temp).text((pad, pad), "B", fill="white", font=font)
+    ink_bbox = temp.getbbox()
+    if ink_bbox is not None:
+        glyph = temp.crop(ink_bbox)
+        gw, gh = glyph.size
+        img.paste(glyph, (int(size / 2 - gw / 2), int(size / 2 - gh / 2)), glyph)
     return img
 
 
