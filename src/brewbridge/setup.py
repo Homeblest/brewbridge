@@ -36,13 +36,22 @@ def register_protocol() -> str:
     """Add the ``brewis://`` handler under HKCU\\Software\\Classes\\brewis.
     Per-user so we don't need admin. Idempotent.
 
+    In a PyInstaller bundle ``sys.executable`` is ``brewbridge.exe`` itself,
+    which is also the URL handler — ``__main__.main`` already routes a bare
+    ``brewis://...`` first-arg to the ``order`` subcommand. In a source
+    install we fall back to ``python -m brewbridge order "%1"``.
+
     Returns the registered command string."""
     if sys.platform != "win32":
         raise RuntimeError("brewis:// protocol registration is Windows-only")
     import winreg
 
-    python = sys.executable
-    cmd = f'"{python}" -m brewbridge order "%1"'
+    if getattr(sys, "frozen", False):
+        # Frozen bundle — the EXE handles brewis:// URLs directly.
+        cmd = f'"{sys.executable}" "%1"'
+    else:
+        # Source install — invoke the module through the running interpreter.
+        cmd = f'"{sys.executable}" -m brewbridge order "%1"'
     root = winreg.HKEY_CURRENT_USER
     base = r"Software\Classes\brewis"
     with winreg.CreateKey(root, base) as k:

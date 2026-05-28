@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  brewbridge MSI installer — WiX v4+ schema.
+
+  What the MSI does:
+    * installs brewbridge.exe + brewbridge-tray.exe + bundled runtime
+      to "%ProgramFiles%\brewbridge\"
+    * adds that folder to the SYSTEM PATH so `brewbridge` works in any shell
+    * drops a Start Menu shortcut to brewbridge-tray.exe
+    * registers add/remove-programs metadata
+  What the MSI does NOT do (deliberately — these are per-user / DB writes
+  that need BeerSmith closed and are handled by `brewbridge install`):
+    * brewis:// URL handler (HKCU\Software\Classes\brewis)
+    * BrewIsOrder.htm into %APPDATA%\BeerSmith4\Reports\
+    * M_MASH / M_WATER inserts into BeerSmith.sqlite
+
+  Build with::
+
+      wix build build/wix/brewbridge.wxs build/wix/Harvested.wxs \
+                -arch x64 \
+                -d Version=0.1.0 \
+                -d SourceDir=dist/brewbridge \
+                -ext WixToolset.UI.wixext \
+                -o dist/brewbridge-0.1.0.msi
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package
+      Name="brewbridge"
+      Manufacturer="Hjalti Leifsson"
+      Version="$(var.Version)"
+      UpgradeCode="6c2c8e4a-9b41-4b8e-b7d0-2a1f8a3f6c9e"
+      Scope="perMachine"
+      Compressed="yes">
+
+    <!-- Replace older installed versions on upgrade. -->
+    <MajorUpgrade
+        DowngradeErrorMessage="A newer version of brewbridge is already installed." />
+
+    <!-- One embedded CAB; users only download a single MSI. -->
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Add/Remove Programs metadata. The icon shows up in the Apps list. -->
+    <Icon Id="brewbridge.ico" SourceFile="build\icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="brewbridge.ico" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/Homeblest/brewbridge" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/Homeblest/brewbridge" />
+
+    <!-- Install dir: %ProgramFiles%\brewbridge\ -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="brewbridge" />
+    </StandardDirectory>
+
+    <!-- Start Menu folder + shortcut to the tray. -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="brewbridge">
+        <Component Id="StartMenuShortcut" Guid="b1e7b8e8-9b8b-4d1c-9e6d-1f7a3b5c8d22">
+          <Shortcut Id="TrayShortcut"
+                    Name="brewbridge tray"
+                    Description="Sync brew.is into BeerSmith and order recipes"
+                    Target="[#brewbridge.exe.tray]"
+                    WorkingDirectory="INSTALLFOLDER"
+                    Icon="brewbridge.ico" />
+          <RemoveFolder Id="RemoveAppMenuFolder" On="uninstall" />
+          <!-- KeyPath registry value so the shortcut component has somewhere
+               to anchor for repair / uninstall tracking. Per-machine. -->
+          <RegistryValue
+              Root="HKLM"
+              Key="Software\brewbridge"
+              Name="installed"
+              Type="integer"
+              Value="1"
+              KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Add install dir to system PATH so `brewbridge sync` works in any cmd/PowerShell. -->
+    <Component Id="PathEnvVar"
+               Directory="INSTALLFOLDER"
+               Guid="3f6e1a7c-2d4b-4f8c-91a7-5b9c2e7d8a13">
+      <Environment Id="UpdatePath"
+                   Name="PATH"
+                   Value="[INSTALLFOLDER]"
+                   Permanent="no"
+                   Part="last"
+                   Action="set"
+                   System="yes" />
+      <RegistryValue Root="HKLM"
+                     Key="Software\brewbridge"
+                     Name="path_set"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes" />
+    </Component>
+
+    <!-- The main feature gathers everything that gets installed. -->
+    <Feature Id="Main" Title="brewbridge" Level="1">
+      <!-- ProductFiles comes from Harvested.wxs (auto-generated from the
+           PyInstaller dist tree by build/gen_harvest.py). -->
+      <ComponentGroupRef Id="ProductFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="PathEnvVar" />
+    </Feature>
+
+    <!-- License dialog uses build/wix/License.rtf. -->
+    <WixVariable Id="WixUILicenseRtf" Value="build\wix\License.rtf" />
+    <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+
+  </Package>
+</Wix>

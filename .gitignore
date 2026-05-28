@@ -3,14 +3,18 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.egg-info/
-build/
 dist/
 .eggs/
 .pytest_cache/
 .ruff_cache/
 .coverage
 htmlcov/
-*.spec
+# NB: build/ is *tracked* — it holds the MSI build sources (spec, wxs,
+# build.ps1). Transient outputs underneath it are ignored individually:
+build/__pycache__/
+build/pyi/
+build/brewbridge/
+build/wix/Harvested.wxs
 
 # Virtual envs
 .venv/

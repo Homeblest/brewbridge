@@ -1,14 +1,23 @@
 # Installing brewbridge on Windows
 
-## The 5-minute install (MSI — when released)
+## The 5-minute install (MSI)
 
-1. Download `brewbridge-<version>.msi` from [Releases](https://github.com/Homeblest/brewbridge/releases).
-2. Double-click. Accept the defaults.
-3. The installer registers the `brewis://` URL handler, drops the BeerSmith report template into place, adds the `Brew.is einfaldur` mash profile and `Reykjavík tap` water profile to your BeerSmith library, and pins **brewbridge tray** to your Start Menu.
+The MSI installs the binaries and adds them to PATH. A second one-time
+command finishes per-user setup (URL handler, report template, library
+profiles) — it has to be a second step because BeerSmith caches the DB
+in memory and must be closed for those writes.
+
+1. Download `brewbridge-<version>.msi` from [Releases](https://github.com/Homeblest/brewbridge/releases). Double-click → accept defaults.
+2. **Close BeerSmith** if it's running.
+3. Open a Command Prompt or PowerShell and run:
+
+       brewbridge install
+
+   This registers the `brewis://` URL handler, drops `BrewIsOrder.htm` into
+   `%APPDATA%\BeerSmith4\Reports\`, adds the `Brew.is einfaldur` mash profile
+   to `M_MASH`, and adds the `Reykjavík tap` water profile to `M_WATER`.
 4. Open BeerSmith → **Tools → Options → Reports → Add Report…** → browse to `%APPDATA%\BeerSmith4\Reports\BrewIsOrder.htm` and import it as type **Recipe**. (BeerSmith requires this go through its own UI.)
-5. Done. Launch **brewbridge** from the Start Menu → it sits in your system tray.
-
-Right-click the tray icon → **Synca núna** to do your first catalog sync.
+5. Done. Launch **brewbridge tray** from the Start Menu → it sits in your system tray. Right-click → **Synca núna** to do your first catalog sync.
 
 ---
 
@@ -121,3 +130,33 @@ The library `F_Y_PKG_DATE` is stamped fresh on every sync, but BeerSmith re-bind
 
 **The `▶ Order at brew.is` button does nothing in BeerSmith**  
 Click works in a browser? Then BeerSmith's embedded report viewer is stripping the custom protocol. Workaround: open the order page via the tray menu's **Panta uppskrift…** instead.
+
+---
+
+## Building the MSI (maintainers)
+
+The release MSI is produced from this repo. You need:
+
+- Python 3.10+ with `pip install pyinstaller pillow pystray`
+- WiX v4+ — one of:
+      scoop install wixtoolset
+      dotnet tool install --global wix
+
+Then from the repo root:
+
+```powershell
+.\build\build.ps1
+```
+
+That runs PyInstaller (producing `dist\brewbridge\` with the two EXEs and
+their shared runtime), walks the resulting tree to emit a WiX file
+fragment (`build\wix\Harvested.wxs`), and invokes `wix build` to produce
+`dist\brewbridge-<version>.msi`.
+
+Flags:
+
+- `-NoClean` — skip wiping `dist\` and `build\pyi\` (fast iteration after a known-good build)
+- `-PyInstallerOnly` — stop after PyInstaller (useful when debugging the EXEs alone)
+
+The MSI version tracks `__version__` in `src\brewbridge\__init__.py`
+automatically; bump that and rerun to cut a new release.
