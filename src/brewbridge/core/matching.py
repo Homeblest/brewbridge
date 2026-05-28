@@ -112,9 +112,13 @@ def translate(name: str) -> str:
         if phrase in s:
             s = s.replace(phrase, PHRASE_ALIASES[phrase])
     tokens = [TOKEN_TRANSLATIONS.get(t, t) for t in s.split()]
-    deduped = []
+    # Dedupe while preserving first-occurrence order. Handles both consecutive
+    # duplicates (from token translations) and parenthetical English mirrors
+    # like "Maltað Hveiti (Wheat)" -> "wheat malt wheat" -> "wheat malt".
+    seen, deduped = set(), []
     for t in tokens:
-        if not deduped or deduped[-1] != t:
+        if t not in seen:
+            seen.add(t)
             deduped.append(t)
     return " ".join(deduped)
 
