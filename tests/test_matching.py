@@ -95,6 +95,24 @@ class TestFamilies:
         # Flaked adjuncts
         ("Oats, Flaked",             1.0,   "flaked"),
         ("Byggflögur",               1.7,   "flaked"),
+        # Wheat malts — must be distinct from base barley malts so the
+        # cross-family penalty fires when a recipe asks for wheat and the
+        # only available product is e.g. peated malt.
+        ("Wheat Malt",               2.4,   "wheat_malt"),
+        ("Maltað Hveiti",            2.4,   "wheat_malt"),
+        ("Maltað Hveiti (Wheat)",    2.4,   "wheat_malt"),
+        ("Weizen Malz",              2.0,   "wheat_malt"),
+        ("Weiss Malz",               2.0,   "wheat_malt"),
+        # Smoked / peated malts — strong phenolic family. Pairing with a
+        # wheat ask is the bug reported on 2026-05-31 against the v0.1
+        # MSI: 350 g of Maltað Hveiti got matched to a 5 kg Peated malt
+        # pack at 64 %. Now they're in distinct buckets.
+        ("Peated malt",              2.8,   "smoked"),
+        ("Weyermann Rauchmalz",      4.0,   "smoked"),
+        ("Reyktur bygg",             3.0,   "smoked"),
+        # Rye — own family
+        ("Rye Malt",                 4.0,   "rye"),
+        ("Rúgmalt",                  4.0,   "rye"),
     ])
     def test_grain_bucket(self, grain, color, bucket):
         assert mm.grain_bucket(grain, color) == bucket
@@ -105,10 +123,11 @@ class TestFamilies:
 # ---------------------------------------------------------------------------
 
 class TestCrossFamilyPenalty:
-    def test_wheat_malt_does_not_match_peated_malt(self):
-        # The canonical Saison-DuBle bug — "Wheat Malt, Bel" used to match
-        # "Peated malt" at 0.64 because both share "malt". Phrase aliases +
-        # cross-family penalty must keep wheat finding wheat.
+    def test_wheat_malt_finds_wheat_when_available(self):
+        # The original Saison-DuBle case — "Wheat Malt, Bel" used to match
+        # "Peated malt" at 0.64 because both share "malt". With wheat
+        # actually available, phrase aliases + cross-family penalty must
+        # keep wheat finding wheat.
         catalog = {"grain": [
             {"name": "Peated malt", "alt_name": "peated malt",
              "F_G_COLOR": 2.8},
@@ -122,6 +141,29 @@ class TestCrossFamilyPenalty:
         assert prod is not None
         assert "Hveiti" in prod["name"]
         assert score > 0.6
+
+    def test_wheat_malt_does_not_match_peated_malt_alone(self):
+        # The bug reported on 2026-05-31 against the v0.1 MSI: 350 g of
+        # "Maltað Hveiti" got matched to a 5 kg Peated malt pack at 64 %
+        # because brew.is was out of wheat malt. With ONLY peated malt
+        # in the catalog the matcher should reject — peated belongs in
+        # the smoked bucket, wheat asks for wheat_malt, cross-family
+        # penalty (0.55x) drops the score below MATCH_THRESHOLD (0.55).
+        # The substitution engine then offers alternatives instead.
+        catalog = {"grain": [
+            {"name": "Peated malt", "alt_name": "peated malt",
+             "F_G_COLOR": 2.8},
+        ]}
+        prod, score, _ = mm.match_product(
+            "Maltað Hveiti", "grain", catalog,
+            ing_meta={"F_G_COLOR": "2.4"})
+        # We don't care which way it rejects — either prod is None or
+        # the returned score is below threshold. The contract is: do not
+        # auto-substitute peated malt for wheat malt under any condition.
+        if prod is not None:
+            assert score < mm.MATCH_THRESHOLD, (
+                f"matched {prod['name']!r} for 'Maltað Hveiti' at "
+                f"{score:.2f} — peated malt is not a wheat substitute")
 
     def test_nugget_does_not_match_fuggles(self):
         # Nugget is high-alpha; Fuggles is English. Different families ->

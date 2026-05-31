@@ -245,6 +245,25 @@ def grain_bucket(name: str, color: float | None) -> str:
     if any(k in n for k in ("carapils", "cara pils", "cara-pils",
                              "carafoam", "cara-foam", "dextrine", "dextrin")):
         return "caramel_light"
+    # Wheat malts — distinct grain family. Can't substitute for base barley
+    # malt without changing the recipe character (mouthfeel, haze, head).
+    # Both English ("wheat", "weizen", "weiss") and Icelandic ("hveiti")
+    # forms; Pilsen-wheat-blends still match "pils" first which is fine —
+    # those are sold as base-pilsner-equivalents.
+    if any(k in n for k in ("wheat", "hveiti", "weizen", "weiss", "weisse")):
+        return "wheat_malt"
+    # Smoked / peated malts (rauchmalz, peated, beech-smoked). Strong
+    # phenolic flavor; pairing them with a recipe asking for clean wheat
+    # malt is the classic matching-fail case this bucket is here to
+    # prevent. Both English and Icelandic forms.
+    if any(k in n for k in ("peated", "smoked", "smoke", "rauch",
+                             "reykt", "reyk")):
+        return "smoked"
+    # Rye malts — also distinct family. Slick mouthfeel, spicy notes,
+    # not interchangeable with base or wheat.
+    if any(k in n for k in (" rye", "rye ", "rye malt", "rugur",
+                             "rúgur", "ruge", "rúg")):
+        return "rye"
     if "pils" in n or "lager malt" in n:
         return "base_pilsner"
     if any(k in n for k in ("pale ale", "maris", "two row", "2-row", "2 row",
