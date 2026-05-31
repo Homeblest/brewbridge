@@ -28,9 +28,15 @@ from pathlib import Path
 from tkinter import ttk
 from typing import Callable
 
-from . import __version__
-from .core import beersmith as bs
-from .core import platform as bb_platform
+# Absolute imports throughout — tray.py is *also* a PyInstaller entry
+# point (brewbridge-tray.exe). When PyInstaller freezes a script as the
+# top-level entry, __package__ is empty and relative imports raise
+# ImportError. Absolute imports work in both the frozen-entry case AND
+# the case where tray.main is called as `brewbridge.tray.main()` from
+# __main__.py's cmd_tray.
+from brewbridge import __version__
+from brewbridge.core import beersmith as bs
+from brewbridge.core import platform as bb_platform
 
 # Where we stash logs and the "last sync" stamp file
 DATA_DIR = Path.home() / ".brewbridge"
@@ -192,7 +198,7 @@ def _action_sync(icon):
     """Run a catalog sync in a background thread; refresh icon when done."""
     icon.notify("Brew.is sync started...", "brewbridge")
     def do_it():
-        from .core import sync
+        from brewbridge.core import sync
         sync.run()
     def done(ok):
         _record_sync(ok)
@@ -208,7 +214,7 @@ def _action_order(icon):
 
 def _action_audit(icon):
     def do_it():
-        from .core import audit
+        from brewbridge.core import audit
         audit.run(fix=False)
     _run_in_thread(do_it)
 
