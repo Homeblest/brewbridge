@@ -30,6 +30,7 @@ from typing import Callable
 
 from . import __version__
 from .core import beersmith as bs
+from .core import platform as bb_platform
 
 # Where we stash logs and the "last sync" stamp file
 DATA_DIR = Path.home() / ".brewbridge"
@@ -170,7 +171,7 @@ def _open_picker():
         rid = rows[sel[0]]["_PERMID_"]
         url = f"brewis://order/{rid}" + ("/cart" if mode.get() == "fill" else "")
         subprocess.Popen([sys.executable, "-m", "brewbridge", "order", url],
-                         creationflags=subprocess.CREATE_NEW_CONSOLE)
+                         creationflags=bb_platform.detached_console_flag())
         root.destroy()
 
     bar = ttk.Frame(root, padding=10)
@@ -213,9 +214,8 @@ def _action_audit(icon):
 
 
 def _action_open_folder(icon):
-    import os
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    os.startfile(DATA_DIR)
+    bb_platform.open_path(DATA_DIR)
 
 
 def _action_quit(icon):

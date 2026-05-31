@@ -28,6 +28,8 @@ import json
 import os
 import shutil
 import sqlite3
+
+from . import platform as bb_platform
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -71,10 +73,13 @@ FLOZ_PER_L = 33.8140227       # L   -> US fl oz
 # touch.
 TAG = " (brew.is)"
 
-# Default BeerSmith install + data paths on Windows
-DEFAULT_DB_PATH = Path(os.path.expandvars(r"%APPDATA%\BeerSmith4\BeerSmith.sqlite"))
-DEFAULT_EXE_PATH = Path(r"C:\Program Files (x86)\BeerSmith4\BeerSmith4.exe")
-DEFAULT_REPORTS_DIR = Path(os.path.expandvars(r"%APPDATA%\BeerSmith4\Reports"))
+# Default BeerSmith install + data paths.
+# Resolved through ``platform`` so they're correct on whatever OS we run on.
+# We expose them as module-level Paths (not functions) so the long-existing
+# call sites elsewhere in the codebase keep working as drop-in defaults.
+DEFAULT_DB_PATH = bb_platform.beersmith_db_path()
+DEFAULT_EXE_PATH = bb_platform.beersmith_exe_path()
+DEFAULT_REPORTS_DIR = bb_platform.beersmith_reports_dir()
 
 
 # ---------------------------------------------------------------------------
@@ -87,12 +92,25 @@ def is_running() -> bool:
     Writing to BeerSmith.sqlite while BeerSmith is open is unsafe — BeerSmith
     holds the recipes in memory and rewrites the file on its own save cycle,
     which can clobber whatever we wrote.
+
+    Windows: shell out to ``tasklist`` and look for ``beersmith`` in the
+    process list (case-insensitive). macOS: ``pgrep -i beersmith`` returns
+    0 on match. On either, an exception from the lookup means we don't
+    know — return False and let the caller decide whether to proceed.
     """
     try:
-        out = subprocess.run(
-            ["tasklist"], capture_output=True, text=True, timeout=20
-        ).stdout.lower()
-        return "beersmith" in out
+        if bb_platform.is_windows():
+            out = subprocess.run(
+                ["tasklist"], capture_output=True, text=True, timeout=20
+            ).stdout.lower()
+            return "beersmith" in out
+        # macOS + Linux: pgrep -i is the portable POSIX path. Exit code 0
+        # means at least one matching process; 1 means none; anything else
+        # is an unexpected error which we treat as "unknown" = False.
+        rc = subprocess.run(
+            ["pgrep", "-i", "beersmith"], capture_output=True, timeout=20
+        ).returncode
+        return rc == 0
     except Exception:
         return False  # can't tell — caller decides whether to proceed
 

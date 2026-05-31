@@ -33,50 +33,81 @@ from .core import beersmith as bs
 # ---------------------------------------------------------------------------
 
 def register_protocol() -> str:
-    """Add the ``brewis://`` handler under HKCU\\Software\\Classes\\brewis.
-    Per-user so we don't need admin. Idempotent.
+    """Register the ``brewis://`` URL handler with the OS.
 
-    In a PyInstaller bundle ``sys.executable`` is ``brewbridge.exe`` itself,
-    which is also the URL handler — ``__main__.main`` already routes a bare
-    ``brewis://...`` first-arg to the ``order`` subcommand. In a source
-    install we fall back to ``python -m brewbridge order "%1"``.
+    Windows: write to ``HKCU\\Software\\Classes\\brewis``. Per-user, no
+    admin needed. Idempotent. In a PyInstaller bundle ``sys.executable``
+    is ``brewbridge.exe`` itself and routes bare ``brewis://...`` first-arg
+    to the ``order`` subcommand; in a source install we go via
+    ``python -m brewbridge order "%1"``.
 
-    Returns the registered command string."""
-    if sys.platform != "win32":
-        raise RuntimeError("brewis:// protocol registration is Windows-only")
-    import winreg
+    macOS: the handler is declared in the .app bundle's ``Info.plist``
+    (``CFBundleURLTypes`` → ``CFBundleURLSchemes`` → ``["brewis"]``) and
+    Launch Services scans it automatically the first time the bundle is
+    placed in ``/Applications/`` or run from anywhere. So on mac this
+    function is a no-op and returns a descriptive status string for the
+    install summary.
 
-    if getattr(sys, "frozen", False):
-        # Frozen bundle — the EXE handles brewis:// URLs directly.
-        cmd = f'"{sys.executable}" "%1"'
-    else:
-        # Source install — invoke the module through the running interpreter.
-        cmd = f'"{sys.executable}" -m brewbridge order "%1"'
-    root = winreg.HKEY_CURRENT_USER
-    base = r"Software\Classes\brewis"
-    with winreg.CreateKey(root, base) as k:
-        winreg.SetValueEx(k, "", 0, winreg.REG_SZ, "URL:Brew.is order")
-        winreg.SetValueEx(k, "URL Protocol", 0, winreg.REG_SZ, "")
-    with winreg.CreateKey(root, base + r"\shell\open\command") as k:
-        winreg.SetValueEx(k, "", 0, winreg.REG_SZ, cmd)
-    return cmd
+    Source installs on macOS *cannot* register the URL handler — Launch
+    Services only honours bundle-declared schemes, not arbitrary CLI
+    invocations. ``brewbridge install`` on macOS-from-source therefore
+    skips this step with a warning.
+
+    Returns the registered command string (or a status message on mac).
+    """
+    from .core import platform as bb_platform
+
+    if bb_platform.is_windows():
+        import winreg
+
+        if getattr(sys, "frozen", False):
+            cmd = f'"{sys.executable}" "%1"'
+        else:
+            cmd = f'"{sys.executable}" -m brewbridge order "%1"'
+        root = winreg.HKEY_CURRENT_USER
+        base = r"Software\Classes\brewis"
+        with winreg.CreateKey(root, base) as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, "URL:Brew.is order")
+            winreg.SetValueEx(k, "URL Protocol", 0, winreg.REG_SZ, "")
+        with winreg.CreateKey(root, base + r"\shell\open\command") as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, cmd)
+        return cmd
+
+    if bb_platform.is_macos():
+        if getattr(sys, "frozen", False):
+            return ("registered automatically via brewbridge.app Info.plist "
+                    "(Launch Services)")
+        return ("skipped (source install on macOS — clone-build the .app "
+                "or run with `pip install brewbridge[app]`)")
+
+    raise RuntimeError(
+        f"brewis:// protocol registration not implemented for "
+        f"platform={sys.platform!r}"
+    )
 
 
 def unregister_protocol() -> None:
-    """Remove the brewis:// handler. Safe to call when nothing's registered."""
-    if sys.platform != "win32":
-        return
-    import winreg
-    try:
-        # Remove subkeys first
-        for sub in (r"shell\open\command", r"shell\open", "shell"):
-            try:
-                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, rf"Software\Classes\brewis\{sub}")
-            except FileNotFoundError:
-                pass
-        winreg.DeleteKey(winreg.HKEY_CURRENT_USER, r"Software\Classes\brewis")
-    except FileNotFoundError:
-        pass
+    """Remove the brewis:// handler. Safe to call when nothing's registered.
+
+    Windows: scrub ``HKCU\\Software\\Classes\\brewis``. macOS: no-op —
+    Launch Services drops the binding automatically when the .app is
+    moved to the Trash."""
+    from .core import platform as bb_platform
+
+    if bb_platform.is_windows():
+        import winreg
+        try:
+            for sub in (r"shell\open\command", r"shell\open", "shell"):
+                try:
+                    winreg.DeleteKey(winreg.HKEY_CURRENT_USER,
+                                     rf"Software\Classes\brewis\{sub}")
+                except FileNotFoundError:
+                    pass
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER,
+                             r"Software\Classes\brewis")
+        except FileNotFoundError:
+            pass
+    # macOS / Linux: nothing to undo.
 
 
 # ---------------------------------------------------------------------------

@@ -95,10 +95,10 @@ def _parse_swap_args(swaps_list: list[str]) -> list[tuple[str, str]]:
 
 
 def _handle_clone(conn, recipe_row, swaps):
-    import os as _os
     import re
     import datetime as dt
     from .core import beersmith as bs
+    from .core import platform as bb_platform
     from .core import recipes
 
     if not swaps:
@@ -123,9 +123,12 @@ def _handle_clone(conn, recipe_row, swaps):
     path.write_text(recipes.recipe_to_bsmx(new_row), encoding="utf-8")
     print(f"\nBsmx skrá: {path}")
     try:
-        _os.startfile(str(path))
+        bb_platform.open_path(path)
         print("Opnuð í BeerSmith.")
-    except (AttributeError, FileNotFoundError):
+    except (AttributeError, FileNotFoundError, OSError):
+        # OSError covers subprocess.run(check=True) failures on mac/linux;
+        # AttributeError covers ancient Python without startfile; the
+        # fallback message lets the user resolve it manually.
         print("Gat ekki opnað í BeerSmith. Tvísmelltu á .bsmx skrána handvirkt.")
 
 
