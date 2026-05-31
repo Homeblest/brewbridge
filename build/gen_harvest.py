@@ -41,8 +41,16 @@ def _id_from_path(rel: Path) -> str:
     guarantee a valid start char and substitute everything else with
     underscores. Long paths get hashed-and-prefixed to stay under WiX's
     72-char identifier limit while remaining stable.
+
+    Important: ``+`` and ``-`` get encoded distinctly (``_plus_`` /
+    ``_minus_``) before the general non-alnum sweep, because Python's
+    bundled tzdata has paired filenames like ``Etc/GMT+2`` and
+    ``Etc/GMT-2``. Mapping both to ``_`` collapsed them to the same ID
+    and produced "Duplicate Component" errors from wix.
     """
-    cleaned = re.sub(r"[^A-Za-z0-9_]", "_", str(rel))
+    # Distinguish + and - before the catch-all underscore sub.
+    s = str(rel).replace("+", "_plus_").replace("-", "_minus_")
+    cleaned = re.sub(r"[^A-Za-z0-9_]", "_", s)
     candidate = "f_" + cleaned
     if len(candidate) <= 72:
         return candidate
@@ -85,12 +93,16 @@ def main():
             files_by_dir.setdefault(f.parent.relative_to(dist), []).append(f)
 
     # ---- emit ----
+    # We emit a <DirectoryRef Id="INSTALLFOLDER"> here rather than re-
+    # declaring INSTALLFOLDER inside its own <StandardDirectory>. The
+    # primary declaration lives in brewbridge.wxs; declaring it twice
+    # (once there, once here) is a "Duplicate Directory" error in WiX 4+.
+    # DirectoryRef extends the existing one with nested children.
     lines: list[str] = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">',
         '  <Fragment>',
-        '    <StandardDirectory Id="ProgramFiles64Folder">',
-        '      <Directory Id="INSTALLFOLDER" Name="brewbridge">',
+        '    <DirectoryRef Id="INSTALLFOLDER">',
     ]
 
     # Track open <Directory> nesting so we can close in reverse order.
@@ -98,7 +110,7 @@ def main():
     dir_ids: dict[Path, str] = {Path("."): "INSTALLFOLDER"}
     component_count = 0
 
-    DIR_INDENT = "      "
+    DIR_INDENT = "    "
 
     def dir_id(rel_dir: Path) -> str:
         if rel_dir in dir_ids:
@@ -131,12 +143,17 @@ def main():
             lines.append(f'{pad}</Directory>')
 
     emit_dirs(Path("."), 1)
-    lines.append('      </Directory>')
-    lines.append('    </StandardDirectory>')
+    lines.append('    </DirectoryRef>')
     lines.append('')
 
     # Now the ComponentGroup — one component per file. Each component
     # references its file's directory via Directory= attribute.
+    # We track every emitted Component / File ID and bail out loudly on
+    # collision — wix's own error for this case is a wall of duplicates
+    # spanning hundreds of lines, much harder to read than a single
+    # source-side message pointing at the colliding paths.
+    seen_comp: dict[str, str] = {}
+    seen_file: dict[str, str] = {}
     lines.append('    <ComponentGroup Id="ProductFiles">')
     for rel_dir in sorted(files_by_dir):
         did = dir_id(rel_dir) if rel_dir != Path(".") else "INSTALLFOLDER"
@@ -149,6 +166,17 @@ def main():
                 comp_id = re.sub(r"[^A-Za-z0-9_]", "_", comp_id)
             file_id = NAMED_FILES.get(rel.name) or _id_from_path(rel)
             file_guid = str(uuid.uuid5(NS, str(rel))).upper()
+
+            if comp_id in seen_comp:
+                sys.exit(f"ID collision: Component {comp_id!r} produced by both "
+                         f"{seen_comp[comp_id]!r} and {str(rel)!r}. "
+                         f"Extend _id_from_path() to disambiguate.")
+            if file_id in seen_file:
+                sys.exit(f"ID collision: File {file_id!r} produced by both "
+                         f"{seen_file[file_id]!r} and {str(rel)!r}. "
+                         f"Extend _id_from_path() to disambiguate.")
+            seen_comp[comp_id] = str(rel)
+            seen_file[file_id] = str(rel)
 
             # Source path relative to where wix build is invoked from (the
             # repo root). $(var.SourceDir) is set on the wix CLI line.

@@ -85,6 +85,16 @@ Then re-open your shell.
 "@
     }
     Write-OK "wix: $wix"
+
+    # WiX v4+ extensions must be installed before use; `-ext` on the build
+    # command no longer auto-fetches them. `extension add -g` is idempotent
+    # — running it on an already-installed extension just reports the
+    # current version and exits 0.
+    & wix extension add -g WixToolset.UI.wixext 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to install WiX UI extension. Try manually: wix extension add -g WixToolset.UI.wixext"
+    }
+    Write-OK "wix extension WixToolset.UI.wixext: ready"
 }
 
 # Pull version from src/brewbridge/__init__.py so MSI version tracks package version
