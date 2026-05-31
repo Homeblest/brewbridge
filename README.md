@@ -22,7 +22,9 @@ Sync **brew.is** in-stock brewing ingredients into **BeerSmith 4**, import the b
 
 ## Quick start
 
-**Easiest** (Windows, non-Python users): download the MSI installer from [releases](https://github.com/Homeblest/brewbridge/releases) and run it. The installer handles Python, the Chromium browser, the `brewis://` URL handler, and the BeerSmith report template.
+**Easiest** (non-Python users): download from [releases](https://github.com/Homeblest/brewbridge/releases) — `.msi` for Windows, `.dmg` for macOS. The installer bundles a Python runtime; you still run a one-time `brewbridge install` from a terminal after the binary install to register the `brewis://` handler and drop the BeerSmith report template (it has to be a second step because BeerSmith.sqlite is locked while BeerSmith is open). See [INSTALL.md](INSTALL.md) for the full walkthrough.
+
+> **macOS status:** the code is platform-portable and the build pipeline is in place, but as of v0.1.0 it hasn't been verified on real Mac hardware. First-mover bug reports very welcome.
 
 **From source** (developers):
 
