@@ -195,16 +195,42 @@ def _open_picker():
 # ---------------------------------------------------------------------------
 
 def _action_sync(icon):
-    """Run a catalog sync in a background thread; refresh icon when done."""
+    """Run a catalog sync in a background thread; refresh icon when done.
+
+    On success: if any recipes flipped from blocked → orderable, fire a
+    notification naming them (truncated to the first 3 with a "+N" tail
+    when longer). If nothing flipped, generic "complete" toast.
+    """
     icon.notify("Brew.is sync started...", "brewbridge")
+    # The sync result needs to survive across threads — _run_in_thread
+    # passes `ok` (bool) to the done callback but not the return value.
+    # Stash it in a dict for the closure.
+    result_holder: dict = {}
+
     def do_it():
         from brewbridge.core import sync
-        sync.run()
+        result_holder["res"] = sync.run()
+
     def done(ok):
         _record_sync(ok)
         icon.icon = _make_icon_image(_sync_state())
-        icon.notify("Brew.is sync complete." if ok else "Sync failed — check log.",
-                    "brewbridge")
+        if not ok:
+            icon.notify("Sync failed — check log.", "brewbridge")
+            return
+        res = result_holder.get("res")
+        if res is not None and res.unlocked:
+            # Top-3 names plus overflow indicator. pystray's notify body
+            # has limited width on every platform; keep it scannable.
+            names = ", ".join(name for _, name in res.unlocked[:3])
+            extra = len(res.unlocked) - 3
+            tail = f" (+{extra})" if extra > 0 else ""
+            icon.notify(
+                f"Nýjar uppskriftir tilbúnar í pöntun: {names}{tail}",
+                "brew.is sync — pantanir mögulegar",
+            )
+        else:
+            icon.notify("Brew.is sync complete.", "brewbridge")
+
     _run_in_thread(do_it, done)
 
 

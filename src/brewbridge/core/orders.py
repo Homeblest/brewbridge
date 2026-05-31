@@ -242,6 +242,57 @@ def line_cost(L: OrderLine) -> int:
 # Blockers + substitution surface
 # ---------------------------------------------------------------------------
 
+def newly_orderable(pre: dict[int, dict],
+                     post: dict[int, dict]) -> list[tuple[int, str]]:
+    """Diff two ``all_recipe_blockers`` snapshots.
+
+    Returns ``[(permid, name), ...]`` sorted by name for every recipe that:
+      * existed in *both* snapshots,
+      * was *blocked* in ``pre`` (non-empty blockers),
+      * is *now fully orderable* in ``post`` (empty blockers).
+
+    A recipe that picked up a different blocker in the new sync (still
+    blocked, just by something else) is NOT returned — only the full
+    blocked→orderable flip counts. A recipe that was already orderable
+    pre-sync also isn't returned (no flip).
+    """
+    flipped: list[tuple[int, str]] = []
+    for rid, p in post.items():
+        if rid not in pre:
+            continue                           # newly-added recipe — no diff
+        if pre[rid]["blockers"] and not p["blockers"]:
+            flipped.append((rid, p["name"]))
+    flipped.sort(key=lambda x: x[1])
+    return flipped
+
+
+def all_recipe_blockers(conn: sqlite3.Connection,
+                         catalog: dict[str, list[dict]]) -> dict[int, dict]:
+    """Snapshot every recipe's blocker set against ``catalog``.
+
+    Returns ``{permid: {"name": str, "blockers": frozenset[str]}}``. An
+    empty ``blockers`` value means the recipe is fully orderable against
+    the supplied catalog. ``frozenset`` makes the values hashable so
+    callers can do set-style diffs cheaply.
+
+    Used by :func:`brewbridge.core.sync.run` to compute which recipes
+    flip from blocked to orderable between the pre-sync and post-sync
+    catalog states — that diff is what feeds the "now orderable" tray
+    notification.
+    """
+    out: dict[int, dict] = {}
+    for r in conn.execute(
+        "SELECT * FROM M_RECIPE ORDER BY F_R_NAME"
+    ):
+        lines, nomatch, _pantry = build_order(r, catalog)
+        blockers = compute_blockers(lines, nomatch, catalog)
+        out[r["_PERMID_"]] = {
+            "name": r["F_R_NAME"],
+            "blockers": frozenset(b["name"] for b in blockers),
+        }
+    return out
+
+
 def compute_blockers(lines: list[OrderLine], nomatch: list[dict],
                      catalog: dict[str, list[dict]] | None = None) -> list[dict]:
     """One entry per blocked ingredient (deduped by name). When ``catalog`` is

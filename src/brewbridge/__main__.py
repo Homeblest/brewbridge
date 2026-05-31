@@ -40,6 +40,10 @@ def cmd_sync(args):
     print(f"  matched specs: {res.matched} / {res.products}")
     print(f"  backup: {res.backup}")
     print(f"  report: {res.report_path}")
+    if res.unlocked:
+        print(f"\nNýjar uppskriftir tilbúnar í pöntun ({len(res.unlocked)}):")
+        for _rid, name in res.unlocked:
+            print(f"  - {name}")
 
 
 def cmd_order(args):

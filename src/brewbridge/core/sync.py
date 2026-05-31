@@ -28,6 +28,7 @@ from pathlib import Path
 from . import beersmith as bs
 from . import catalog as cat
 from . import matching as mm
+from . import orders
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +82,16 @@ class SyncResult:
     unmatched: int
     backup: Path
     report_path: Path
+    # Recipes that flipped from "blocked (something missing)" to "fully
+    # orderable" as a result of this sync. Empty list = nothing changed
+    # (or this was a first-ever sync with no pre-state to compare to).
+    unlocked: list[tuple[int, str]] = None  # type: ignore[assignment]
+
+    def __post_init__(self):
+        # dataclass defaults can't use mutable list literals safely; the
+        # None sentinel is the standard workaround. Convert on construction.
+        if self.unlocked is None:
+            self.unlocked = []
 
 
 def _make_notes(product: dict, amount: tuple[float, str] | None,
@@ -188,6 +199,18 @@ def run(*, db_path: Path = bs.DEFAULT_DB_PATH, purge_builtins: bool = True,
     refs = load_spec_reference(conn)
     templates = {t: column_template(conn, t) for t in bs.LIBRARY_TABLE}
 
+    # Pre-sync snapshot: which recipes are blocked right now? Captured
+    # against the OLD (brew.is) library rows before the DELETE wipes
+    # them. If the old catalog is empty (first-ever sync, or all rows
+    # cleared), skip the snapshot — there's no meaningful "before" to
+    # compare against and dumping every recipe in a first-sync toast
+    # would be noisy. ``pre_state = None`` flows through to "no diff".
+    pre_catalog = orders.load_catalog(conn)
+    pre_has_rows = any(items for items in pre_catalog.values())
+    pre_state: dict[int, dict] | None = (
+        orders.all_recipe_blockers(conn, pre_catalog) if pre_has_rows else None
+    )
+
     now_s = str(int(time.time()))
     rows: dict[str, list[dict]] = {t: [] for t in bs.LIBRARY_TABLE}
     matched_count = 0
@@ -231,6 +254,17 @@ def run(*, db_path: Path = bs.DEFAULT_DB_PATH, purge_builtins: bool = True,
             cur.execute(f"INSERT INTO {table} ({cols}) VALUES ({ph})", list(row.values()))
         inserted[t] = len(rows[t])
     conn.commit()
+
+    # Post-sync snapshot against the freshly-written (brew.is) rows.
+    # Done before conn.close() so we don't have to reopen. Diff against
+    # pre_state to find recipes that flipped blocked → orderable.
+    if pre_state is not None:
+        post_catalog = orders.load_catalog(conn)
+        post_state = orders.all_recipe_blockers(conn, post_catalog)
+        unlocked = orders.newly_orderable(pre_state, post_state)
+    else:
+        unlocked = []
+
     conn.close()
 
     # Write a human-readable report alongside the backup
@@ -245,6 +279,10 @@ def run(*, db_path: Path = bs.DEFAULT_DB_PATH, purge_builtins: bool = True,
             f.write("\nUnmatched (verify specs in BeerSmith):\n")
             for t, name in sorted(unmatched):
                 f.write(f"  [{t}] {name}\n")
+        if unlocked:
+            f.write(f"\nNow orderable after this sync ({len(unlocked)}):\n")
+            for _rid, name in unlocked:
+                f.write(f"  - {name}\n")
         f.write(f"\nBackup: {backup}\n")
 
     return SyncResult(
@@ -255,4 +293,5 @@ def run(*, db_path: Path = bs.DEFAULT_DB_PATH, purge_builtins: bool = True,
         unmatched=len(unmatched),
         backup=backup,
         report_path=rpt,
+        unlocked=unlocked,
     )
