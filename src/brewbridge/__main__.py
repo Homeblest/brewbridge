@@ -32,7 +32,7 @@ def _reconfigure_stdout():
 
 
 def cmd_sync(args):
-    from .core import sync
+    from brewbridge.core import sync
     res = sync.run(purge_builtins=not args.keep_builtins)
     print(f"\n  inserted: {sum(res.inserted.values())} rows "
           f"(grain {res.inserted['grain']}, hops {res.inserted['hops']}, "
@@ -46,8 +46,8 @@ def cmd_order(args):
     import datetime as dt
     import re
     import webbrowser
-    from .core import beersmith as bs
-    from .core import orders
+    from brewbridge.core import beersmith as bs
+    from brewbridge.core import orders
 
     ident, uri_mode, swaps = orders.parse_uri(args.target)
     conn = bs.open_db()
@@ -97,9 +97,9 @@ def _parse_swap_args(swaps_list: list[str]) -> list[tuple[str, str]]:
 def _handle_clone(conn, recipe_row, swaps):
     import re
     import datetime as dt
-    from .core import beersmith as bs
-    from .core import platform as bb_platform
-    from .core import recipes
+    from brewbridge.core import beersmith as bs
+    from brewbridge.core import platform as bb_platform
+    from brewbridge.core import recipes
 
     if not swaps:
         print("Engar staðgöngur tilgreindar — ekkert að gera.")
@@ -133,7 +133,7 @@ def _handle_clone(conn, recipe_row, swaps):
 
 
 def cmd_audit(args):
-    from .core import audit
+    from brewbridge.core import audit
     res = audit.run(fix=args.fix)
     by_cat = {}
     for i in res.issues:
@@ -157,7 +157,7 @@ def cmd_audit(args):
 
 
 def cmd_install(args):
-    from . import setup as bb_setup
+    from brewbridge import setup as bb_setup
     print("brewbridge setup")
     try:
         s = bb_setup.install_all(skip_db=args.skip_db)
@@ -179,7 +179,7 @@ def cmd_install(args):
 
 
 def cmd_tray(args):
-    from . import tray
+    from brewbridge import tray
     tray.main()
 
 
