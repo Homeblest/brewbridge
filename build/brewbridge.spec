@@ -55,7 +55,12 @@ cli_a = Analysis(
     [os.path.join(SRC, "__main__.py")],
     pathex=[os.path.join(REPO, "src")],
     binaries=[],
-    datas=[],
+    # Ship brewbridge/assets/ inside the bundle. core/sync.py's
+    # `_BUNDLED_REF` looks for assets/specs_reference.json relative to
+    # the brewbridge package directory; PyInstaller has to put the
+    # file at that same relative path for the lookup to resolve when
+    # the user's live BeerSmith library is already empty.
+    datas=[(os.path.join(SRC, "assets"), os.path.join("brewbridge", "assets"))],
     hiddenimports=_HIDDEN,
     hookspath=[],
     runtime_hooks=[],
@@ -72,9 +77,9 @@ cli_a = Analysis(
 # --- Tray analysis (brewbridge-tray.exe) --------------------------------
 tray_a = Analysis(
     [os.path.join(SRC, "tray.py")],
-    pathex=["src"],
+    pathex=[os.path.join(REPO, "src")],
     binaries=[],
-    datas=[],
+    datas=[(os.path.join(SRC, "assets"), os.path.join("brewbridge", "assets"))],
     hiddenimports=_HIDDEN + [
         # pystray loads its Windows backend by string name
         "pystray._win32",

@@ -38,24 +38,79 @@ from . import orders
 DATA_DIR = Path.home() / ".brewbridge"
 REF_PATH = DATA_DIR / "specs_reference.json"
 
+# Bundled fallback. Used when the user's library is already purged on
+# first sync (which happens to anyone who ran an earlier version of
+# brewbridge or the legacy brewis-beersmith scripts before this code
+# existed). The asset is a frozen snapshot of a clean BeerSmith 4
+# install's M_GRAIN / M_HOPS / M_YEAST / M_MISC libraries (142/464/
+# 538/129 rows), so the spec-matcher always has something to bind
+# against even when the live DB has nothing.
+_BUNDLED_REF = Path(__file__).resolve().parent.parent / "assets" / "specs_reference.json"
+
+
+def _is_empty_snapshot(data: dict) -> bool:
+    """A snapshot is 'empty' for our purposes if every category is
+    zero-length. Half-empty (e.g. grains populated but yeast zero) is
+    still better than the bundled fallback for those non-empty
+    categories, so we don't replace those."""
+    return all(not data.get(t) for t in bs.LIBRARY_TABLE)
+
 
 def load_spec_reference(conn: sqlite3.Connection) -> dict[str, list[dict]]:
-    """Read or create the frozen spec reference. Built-in BeerSmith ingredient
-    rows (those not tagged ``(brew.is)``) are snapshotted to disk on first run
-    so that matching keeps working even after we purge the live library."""
+    """Return the frozen spec reference — used to copy brewing properties
+    (color, alpha, attenuation...) onto newly-inserted (brew.is) library
+    rows so BeerSmith's IBU/ABV calculators have real numbers to work with.
+
+    Resolution order:
+      1. Existing ``~/.brewbridge/specs_reference.json`` IF it has rows.
+      2. Snapshot the user's live BeerSmith library (every non-(brew.is)
+         row) — that's the case for a clean BeerSmith 4 install where the
+         built-in library hasn't been purged yet.
+      3. Bundled package asset ``brewbridge/assets/specs_reference.json``
+         — a frozen snapshot from a clean BeerSmith 4. Last-resort
+         fallback for users whose library was already purged when they
+         first installed brewbridge. (1.3 MB; shipped in the wheel/MSI.)
+    """
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 1. Existing file, if non-empty
     if REF_PATH.exists():
         with REF_PATH.open(encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+        if not _is_empty_snapshot(data):
+            return data
+        # Empty snapshot from a prior bad run — keep going, we'll repopulate.
+
+    # 2. Snapshot the live library
     refs: dict[str, list[dict]] = {}
     for t, (table, name_col, _) in bs.LIBRARY_TABLE.items():
         refs[t] = [dict(r) for r in conn.execute(
             f"SELECT * FROM {table} WHERE {name_col} NOT LIKE ?",
             (f"%{bs.TAG}",),
         )]
-    with REF_PATH.open("w", encoding="utf-8") as f:
-        json.dump(refs, f, ensure_ascii=False)
-    return refs
+
+    if not _is_empty_snapshot(refs):
+        with REF_PATH.open("w", encoding="utf-8") as f:
+            json.dump(refs, f, ensure_ascii=False)
+        return refs
+
+    # 3. Bundled asset fallback
+    if _BUNDLED_REF.exists():
+        with _BUNDLED_REF.open(encoding="utf-8") as f:
+            refs = json.load(f)
+        # Cache it locally so subsequent runs don't re-read the asset and
+        # so the user can edit it if they want to override.
+        with REF_PATH.open("w", encoding="utf-8") as f:
+            json.dump(refs, f, ensure_ascii=False)
+        return refs
+
+    # Shouldn't happen — bundled asset is committed and shipped. Be
+    # explicit if it does so we don't silently match nothing.
+    raise RuntimeError(
+        "No spec reference available: live BeerSmith library is empty AND "
+        f"the bundled fallback at {_BUNDLED_REF} is missing. brewbridge "
+        "install is malformed."
+    )
 
 
 def column_template(conn: sqlite3.Connection, ingredient_type: str) -> dict[str, object]:

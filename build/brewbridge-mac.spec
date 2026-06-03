@@ -83,7 +83,10 @@ a = Analysis(
     [os.path.join(SRC, "__main__.py")],
     pathex=[os.path.join(REPO, "src")],
     binaries=[],
-    datas=[],
+    # Ship brewbridge/assets/ inside the .app so core/sync.py's bundled
+    # specs_reference fallback can find it. See the Windows spec for
+    # the rationale.
+    datas=[(os.path.join(SRC, "assets"), os.path.join("brewbridge", "assets"))],
     hiddenimports=_HIDDEN,
     hookspath=[],
     runtime_hooks=[],
