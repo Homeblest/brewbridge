@@ -152,7 +152,8 @@ def cmd_audit(args):
     if args.fix:
         ly, ry = res.yeast_dates_fixed
         print(f"\nBackup: {res.backup}")
-        print(f"Fixed yeast dates: {ly} library, {ry} recipes")
+        print(f"Fixed yeast dates:        {ly} library, {ry} recipes")
+        print(f"Rebound yeast attenuation in {res.yeast_attenuation_fixed} recipes")
         print(f"Rebuilt mash for {res.mashes_rebuilt} recipes")
     elif not args.fix:
         n_auto = len(by_cat.get("yeast_date", [])) + len(by_cat.get("mash", []))

@@ -57,6 +57,9 @@ class AuditResult:
     recipes_checked: int
     issues: list[Issue] = field(default_factory=list)
     yeast_dates_fixed: tuple[int, int] = (0, 0)  # (library_rows, recipe_rows)
+    yeast_attenuation_fixed: int = 0              # recipes whose embedded
+                                                  # F_Y_ATTENUATION got rebound
+                                                  # from the library
     mashes_rebuilt: int = 0
     backup: Path | None = None
 
@@ -250,6 +253,82 @@ def fix_yeast_dates(conn: sqlite3.Connection,
     return lib_fixed, rec_fixed
 
 
+def fix_yeast_attenuation(conn: sqlite3.Connection,
+                           folder: str = "/Brew.is/") -> int:
+    """Push library yeast attenuation into recipes whose embedded copy is 0.
+
+    Why this is needed: recipes get imported with whatever the LIBRARY
+    yeast row had at import time. If the library row hadn't matched a
+    built-in spec yet (the "matched specs: 0/N" bug pre-#30), it had
+    attenuation=0. After the spec_reference fix and Fermentis aliases,
+    the library NOW has correct attenuation — but BeerSmith only re-binds
+    from library into recipes when a user opens each recipe in the UI.
+    Across 25 imported recipes that's 25 manual opens.
+
+    Same shape as fix_yeast_dates above: walk every recipe in ``folder``,
+    parse Ingredients, find yeast entries with F_Y_ATTENUATION == 0, look
+    up the library by name (with and without the (brew.is) tag) and copy
+    its attenuation in. Returns count of recipes touched.
+
+    Doesn't touch recipes whose embedded attenuation is non-zero —
+    treats those as deliberate user overrides.
+    """
+    # Build a {normalised_name: attenuation} lookup from every M_YEAST
+    # row that has a usable attenuation value. Include both tagged and
+    # untagged names so embedded entries match either way.
+    lib: dict[str, float] = {}
+    for r in conn.execute(
+        "SELECT F_Y_NAME, F_Y_ATTENUATION FROM M_YEAST"
+    ):
+        atten = float(r["F_Y_ATTENUATION"] or 0)
+        if atten <= 0:
+            continue
+        name = r["F_Y_NAME"] or ""
+        lib[name] = atten
+        # Also key the un-tagged variant so embedded yeasts without the
+        # (brew.is) suffix bind to the (brew.is) library row.
+        stripped = name.replace(bs.TAG, "").strip()
+        if stripped != name:
+            lib.setdefault(stripped, atten)
+
+    if not lib:
+        # No library data to push — nothing to do. Happens on a fresh
+        # install where the library itself has zero-attenuation rows
+        # because the matcher couldn't bind anything.
+        return 0
+
+    now_s = str(int(dt.datetime.now().timestamp()))
+    rec_fixed = 0
+    for r in conn.execute(
+        "SELECT _PERMID_, Ingredients FROM M_RECIPE WHERE F_R_FOLDER_NAME=?",
+        (folder,)
+    ):
+        ings = json.loads(r["Ingredients"]) if r["Ingredients"] else []
+        changed = False
+        for ing in ings:
+            if ing.get("_Schema_") != bs.SCHEMA["yeast"]:
+                continue
+            cur = float(ing.get("F_Y_ATTENUATION", 0) or 0)
+            if cur > 0:
+                continue                            # respect user override
+            name = ing.get("F_Y_NAME", "") or ""
+            # Try the embedded name, then a (brew.is)-tag-stripped variant.
+            new_atten = lib.get(name) or lib.get(
+                name.replace(bs.TAG, "").strip())
+            if new_atten:
+                # BeerSmith stores embedded numerics as quoted strings.
+                ing["F_Y_ATTENUATION"] = bs.fmt(new_atten)
+                changed = True
+        if changed:
+            conn.execute(
+                "UPDATE M_RECIPE SET Ingredients=?, _MOD_=? WHERE _PERMID_=?",
+                (bs.compact_json(ings), now_s, r["_PERMID_"]),
+            )
+            rec_fixed += 1
+    conn.commit()
+    return rec_fixed
+
+
 def fix_mashes(conn: sqlite3.Connection,
                folder: str = "/Brew.is/") -> int:
     """Rebuild mash data for any recipe where steps are empty / grain weight
@@ -347,6 +426,7 @@ def run(*, db_path: Path = bs.DEFAULT_DB_PATH, fix: bool = False,
     if fix:
         result.backup = bs.backup_db(db_path)
         result.yeast_dates_fixed = fix_yeast_dates(conn, folder)
+        result.yeast_attenuation_fixed = fix_yeast_attenuation(conn, folder)
         result.mashes_rebuilt = fix_mashes(conn, folder)
     conn.close()
     return result
