@@ -274,14 +274,23 @@ def fix_yeast_attenuation(conn: sqlite3.Connection,
     treats those as deliberate user overrides.
     """
     # Build a {normalised_name: attenuation} lookup from every M_YEAST
-    # row that has a usable attenuation value. Include both tagged and
-    # untagged names so embedded entries match either way.
+    # row that has a usable attenuation. BeerSmith stores library
+    # attenuation as a min/max range (a typical ale strain is e.g.
+    # 71-75%) but the recipe-embedded yeast uses a single
+    # F_Y_ATTENUATION value — we compute the midpoint.
     lib: dict[str, float] = {}
     for r in conn.execute(
-        "SELECT F_Y_NAME, F_Y_ATTENUATION FROM M_YEAST"
+        "SELECT F_Y_NAME, F_Y_MIN_ATTENUATION, F_Y_MAX_ATTENUATION FROM M_YEAST"
     ):
-        atten = float(r["F_Y_ATTENUATION"] or 0)
-        if atten <= 0:
+        min_a = float(r["F_Y_MIN_ATTENUATION"] or 0)
+        max_a = float(r["F_Y_MAX_ATTENUATION"] or 0)
+        if min_a > 0 and max_a > 0:
+            atten = (min_a + max_a) / 2
+        elif min_a > 0:
+            atten = min_a
+        elif max_a > 0:
+            atten = max_a
+        else:
             continue
         name = r["F_Y_NAME"] or ""
         lib[name] = atten

@@ -15,17 +15,27 @@ import sqlite3
 from brewbridge.core import audit, beersmith as bs
 
 
-def _set_up_db(yeast_lib_rows: list[tuple[str, float]],
+def _set_up_db(yeast_lib_rows: list[tuple],
                recipes: list[tuple[int, str, list[dict]]]):
     """Build an in-memory BeerSmith-shaped DB with given M_YEAST library
-    rows and M_RECIPE rows. The recipes parameter is a list of
-    (permid, folder, ingredients_list)."""
+    rows and M_RECIPE rows.
+
+    yeast_lib_rows: list of either
+        (name, attenuation)               — convenience; sets min==max
+        (name, min_atten, max_atten)      — explicit range
+
+    recipes: list of (permid, folder, ingredients_list).
+    """
     conn = sqlite3.connect(":memory:")
     conn.row_factory = sqlite3.Row
+    # Real BeerSmith schema: attenuation stored as min/max range.
+    # Recipe-embedded yeast uses a single F_Y_ATTENUATION; we compute
+    # the midpoint when pushing library -> recipe.
     conn.execute("""CREATE TABLE M_YEAST (
         _PERMID_ INTEGER PRIMARY KEY,
         F_Y_NAME TEXT,
-        F_Y_ATTENUATION REAL
+        F_Y_MIN_ATTENUATION REAL,
+        F_Y_MAX_ATTENUATION REAL
     )""")
     conn.execute("""CREATE TABLE M_RECIPE (
         _PERMID_ INTEGER PRIMARY KEY,
@@ -33,10 +43,15 @@ def _set_up_db(yeast_lib_rows: list[tuple[str, float]],
         Ingredients TEXT,
         _MOD_ TEXT
     )""")
-    for i, (name, atten) in enumerate(yeast_lib_rows):
+    for i, row in enumerate(yeast_lib_rows):
+        if len(row) == 2:
+            name, atten = row
+            min_a, max_a = atten, atten
+        else:
+            name, min_a, max_a = row
         conn.execute(
-            "INSERT INTO M_YEAST VALUES (?, ?, ?)",
-            (i + 1, name, atten)
+            "INSERT INTO M_YEAST VALUES (?, ?, ?, ?)",
+            (i + 1, name, min_a, max_a)
         )
     for permid, folder, ings in recipes:
         conn.execute(
@@ -161,6 +176,27 @@ def test_multiple_recipes_only_changed_ones_counted():
         ],
     )
     assert audit.fix_yeast_attenuation(conn) == 1
+
+
+def test_library_range_is_averaged_into_recipe_midpoint():
+    """The library stores attenuation as a min/max range. The recipe
+    side wants a single value — we use the midpoint. Verifies the
+    formula for a typical ale-yeast range (e.g. SafAle English Ale
+    runs 71-75%; recipe should land at 73%)."""
+    conn = _set_up_db(
+        yeast_lib_rows=[("SafAle English Ale (brew.is)", 71.0, 75.0)],
+        recipes=[(1, "/Brew.is/", [
+            {"_Schema_": bs.SCHEMA["yeast"],
+             "F_Y_NAME": "SafAle English Ale (brew.is)",
+             "F_Y_ATTENUATION": "0"},
+        ])],
+    )
+    assert audit.fix_yeast_attenuation(conn) == 1
+    raw = conn.execute(
+        "SELECT Ingredients FROM M_RECIPE WHERE _PERMID_=1"
+    ).fetchone()[0]
+    yeast = json.loads(raw)[0]
+    assert abs(float(yeast["F_Y_ATTENUATION"]) - 73.0) < 0.01
 
 
 def test_only_brewis_folder_is_touched():
