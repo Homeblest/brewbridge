@@ -30,6 +30,31 @@ class TestTranslate:
         assert "barley" in mm.translate("Byggflögur").split()
         assert "rye" in mm.translate("Maltaður rúgur").split()
 
+    def test_fermentis_brand_unification(self):
+        # brew.is sells dry yeasts under "Fermentis X-NN" naming.
+        # BeerSmith built-ins use "Safale / Safbrew / Saflager" sub-brand
+        # naming. Without phrase aliases bridging these, every dry yeast
+        # from brew.is ends up unmatched and the recipes that use them
+        # get attenuation=0 -> broken ABV calculation.
+        assert mm.translate("Fermentis S-04 11.5gr") \
+            .startswith("safale english ale")
+        assert mm.translate("Fermentis US-05") \
+            .startswith("safale american")
+        assert mm.translate("Fermentis W-34/70") \
+            .startswith("saflager german lager")
+        assert mm.translate("Fermentis T-58") \
+            .startswith("safbrew specialty ale")
+        # The matcher must be confident enough to fire for these pairs
+        for brewis, bs_name in [
+            ("Fermentis S-04 11.5gr",         "SafAle English Ale"),
+            ("Fermentis US-05 11.5gr",        "Safale American"),
+            ("Fermentis W-34/70 11.5gr",      "SafLager German Lager"),
+            ("Fermentis T-58 11.5gr",         "Safbrew Specialty Ale"),
+        ]:
+            sim = mm.similarity(brewis, bs_name)
+            assert sim >= mm.MATCH_THRESHOLD, (
+                f"{brewis!r} vs {bs_name!r}: sim={sim:.2f} below threshold")
+
     def test_dedupes_consecutive_duplicate_tokens(self):
         # Phrase + token translations can produce duplicates — dedupe keeps
         # similarity scoring honest.

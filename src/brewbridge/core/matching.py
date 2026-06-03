@@ -66,6 +66,31 @@ PHRASE_ALIASES = {
     "cara munich":             "caramunich",
     "cara fa":                 "carafa",
     "carapils dextrine":       "carapils",
+
+    # ---- Fermentis brand-to-product unification ----
+    # brew.is sells dry yeasts under their parent-brand name ("Fermentis
+    # S-04 11.5gr"), but BeerSmith's built-in library names the same
+    # products by Fermentis's sub-brand and descriptor ("SafAle English
+    # Ale"). Without these aliases the brew.is rows can't bind to any
+    # built-in spec, so every imported recipe that uses dry yeast lands
+    # with attenuation=0 and BeerSmith's ABV calculator returns zero.
+    #
+    # Mappings below are the documented Fermentis product codes; verified
+    # against brew.is's catalog 2026-06.
+    "fermentis s 04":         "safale english ale",       # SafAle S-04
+    "fermentis us 05":        "safale american",          # SafAle US-05
+    "fermentis s 33":         "safbrew ale",              # Safbrew S-33
+    "fermentis t 58":         "safbrew specialty ale",    # Safbrew T-58
+    "fermentis w 34 70":      "saflager german lager",    # Saflager W-34/70
+    "fermentis be 256":       "safbrew abbaye belgian",   # Safbrew BE-256 (Abbaye)
+    "fermentis w 68":         "safbrew wheat",            # Safbrew W-68
+
+    # ---- Grain pack/origin-suffix stripping ----
+    # brew.is occasionally tags products with origin or "(aromatic)" or
+    # pack-size in the name; BeerSmith's library doesn't. Same brewing
+    # character — peel the noise.
+    "melanoidin aromatic":     "melanoidin",
+    "ultra pils":              "pilsen",                  # Dingemans Ultra Pils
 }
 
 # Single-token translations applied after phrase aliases
