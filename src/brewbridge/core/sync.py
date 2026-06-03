@@ -170,10 +170,22 @@ def _make_notes(product: dict, amount: tuple[float, str] | None,
 
 def _row_for(t: str, name: str, matched: dict | None, template: dict,
              inv: float, note: str, now: str) -> dict:
-    """Build a complete column dict for one managed ingredient row, starting
-    from the matched built-in row (or the blank template) and overriding
-    identity / inventory / supplier / price."""
-    row = dict(matched) if matched else dict(template)
+    """Build a complete column dict for one managed ingredient row.
+
+    Start from the column template (which has every real schema column
+    with a sane default), then overlay matched values ONLY for keys
+    that exist in the template. The matched dict can carry synthetic
+    keys added during matching (e.g. ``"name"``) that aren't real DB
+    columns — including them in the INSERT raises
+    ``sqlite3.OperationalError: table X has no column named name``.
+    This filter-via-template approach is robust to future additions of
+    synthetic match-helper keys.
+    """
+    row = dict(template)
+    if matched:
+        for k, v in matched.items():
+            if k in template:
+                row[k] = v
     row.pop("_PERMID_", None)
     row.update({
         "_MOD_": now, "_CLOUDID_": 0, "_EXTRA_": 0,
