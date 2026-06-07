@@ -606,15 +606,41 @@ def parse_uri(s: str) -> tuple[str, str, list[tuple[str, str]]]:
 # ---------------------------------------------------------------------------
 
 def find_recipe(conn: sqlite3.Connection, ident: str | int) -> sqlite3.Row | None:
-    """Look up a recipe by _PERMID_ (if numeric) or fuzzy name match."""
+    """Look up a recipe by _PERMID_, exact name (case + diacritic
+    insensitive), or fuzzy similarity — in that order of preference.
+
+    Resolution ladder:
+      1. Exact ``_PERMID_`` match if ``ident`` is numeric
+      2. Exact normalised-name match (``norm(F_R_NAME) == norm(ident)``)
+      3. Fuzzy similarity match scoring > 0.6, highest wins
+
+    Why exact match is its own step instead of letting similarity sort
+    it out: ``mm.similarity`` returns 1.0 for both true exact matches
+    AND prefix matches (a +0.15 "one is a substring of the other" bonus
+    on top of a 0.85+ raw ratio, clamped at 1.0). When a recipe family
+    has names like "Bölvað Bull" / "Bölvað Bull v2" / "Bölvað Bull v3",
+    looking up "Bölvað Bull v3" ties the original (prefix) with the
+    intended v3 at 1.0, and iteration order picks the wrong one.
+    Treating exact-normalised-name as a hard win above similarity
+    removes the ambiguity entirely.
+    """
     if str(ident).isdigit():
         r = conn.execute("SELECT * FROM M_RECIPE WHERE _PERMID_=?",
                          (int(ident),)).fetchone()
         if r:
             return r
     needle = mm.norm(str(ident))
+    # Materialise once so we don't traverse the table twice; for any
+    # plausible recipe library this is well under 100 rows.
+    candidates = list(conn.execute("SELECT * FROM M_RECIPE"))
+    # Pass 1: exact normalised-name match. Guarantees prefix-ambiguity
+    # never beats the real thing.
+    for r in candidates:
+        if mm.norm(r["F_R_NAME"]) == needle:
+            return r
+    # Pass 2: fuzzy similarity fallback for typos / partial names.
     best, score = None, 0.0
-    for r in conn.execute("SELECT * FROM M_RECIPE"):
+    for r in candidates:
         s = mm.similarity(needle, r["F_R_NAME"])
         if s > score:
             best, score = r, s
