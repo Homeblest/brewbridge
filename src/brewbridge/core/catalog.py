@@ -159,22 +159,109 @@ def category_type(category_name: str) -> str | None:
 def classify_product(product: dict, cat_names: dict[int, str]) -> str | None:
     """Determine the BeerSmith ingredient type for a product, or None if it's
     equipment / a recipe kit / outside our scope. Picks the most-specific
-    type when a product belongs to multiple categories."""
+    type when a product belongs to multiple categories.
+
+    Three-stage classification:
+
+      1. Equipment-by-name → None (e.g. magnetic stirrers).
+      2. Categories: each product lists category IDs; map each ID to its
+         category name and bucket via :func:`category_type`. Most products
+         classify this way.
+      3. Name+description fallback for products whose category IDs aren't
+         in ``cat_names`` (orphan IDs). brew.is's ``$scategories`` exposes
+         50 categories but products reference some IDs outside that list
+         (e.g. Dingemans Wheat at categories [83, 86] — neither known).
+         Without this fallback, those products are silently dropped and
+         users see "out of stock" for items that are actually in stock.
+    """
+    name_norm = normalise(product.get("name", ""))
     if _is_equipment(product.get("name", "")):
         return None
-    if "thurrmalt" in normalise(product.get("name", "")) or \
-       "dme" in normalise(product.get("name", "")):
+    if "thurrmalt" in name_norm or "dme" in name_norm:
         # Dry malt extract is filed under "Ger" on brew.is but belongs in grain.
         return "grain"
     types: set[str] = set()
+    has_known_category = False
     for cid in product.get("categories") or []:
-        t = category_type(cat_names.get(cid, ""))
-        if t:
-            types.add(t)
+        cat_name = cat_names.get(cid)
+        if cat_name:                       # cat_names lookup succeeded
+            has_known_category = True
+            t = category_type(cat_name)
+            if t:
+                types.add(t)
+    # Fallback ONLY when every category is an orphan ID (unknown to
+    # cat_names). If the product has *known* categories that just
+    # aren't ingredient categories (recipes, brewing equipment, cheese-
+    # making supplies, sanitisers, …), that's a deliberate signal from
+    # brew.is — don't second-guess with text heuristics that would
+    # match "malt" / "yeast" tokens in equipment descriptions.
+    if not types and not has_known_category:
+        types |= _classify_by_text(product)
     for preferred in ("yeast", "hops", "grain", "misc"):
         if preferred in types:
             return preferred
     return None
+
+
+# Per-type ingredient tokens used for the orphan-category fallback.
+# Scanned against the normalised concatenation of name + description. We
+# pick the FIRST type that matches any token (preference order grain →
+# hops → yeast → misc) — this matters because a product description
+# might mention multiple ingredient families ("wheat malt commonly paired
+# with Saaz hops…"). The product itself is one of them, picked by which
+# token group matches FIRST.
+#
+# Tuned conservatively: tokens here should be strong identifiers, not
+# just "could appear in any beer description". When in doubt, leave it
+# out — false negatives merely fail back to the existing category path;
+# false positives misclassify equipment as ingredients.
+_FALLBACK_TOKENS = {
+    "grain": (
+        "malt", "hveiti", "wheat", "bygg", "barley",
+        "pilsner", "pilsen", "munich", "vienna", "pale ale",
+        "maris otter", "korntegund",
+        "crystal", "caramell", "caramel", "cara",
+        "rista", "roast", "flog", "flake",
+        "rugur", "rye", "oats", "haframjol", "hafrar",
+        "peated", "smoked", "rauch", "reykt",
+        "special b", "special w", "melanoidin",
+        "carapils", "carafa",
+    ),
+    "hops": (
+        "humla", "humlategund",
+        "fuggle", "saaz", "cascade", "centennial", "citra", "magnum",
+        "amarillo", "columbus", "chinook", "simcoe", "mosaic",
+        "nugget", "willamette", "challenger", "target", "northdown",
+        "hallertau", "tettnang", "spalt", "hersbrucker",
+        "amerisk", "evropsk", "noble",
+    ),
+    "yeast": (
+        " ger ", "yeast", "safale", "safbrew", "saflager", "fermentis",
+        "lallemand", "lalbrew", "wyeast", "white labs", "abbaye",
+        "kveik", "voss", "hothead",
+    ),
+}
+
+
+def _classify_by_text(product: dict) -> set[str]:
+    """Best-effort classification from the product NAME and DESCRIPTION
+    when category IDs don't match anything in our cat_names map. See
+    :func:`classify_product` for context.
+
+    Returns a set so the caller's preference-ordered picker still has
+    something to chew on if name+desc happen to imply multiple types."""
+    name = normalise(product.get("name", ""))
+    # Strip HTML tags from description before normalising — descriptions
+    # are HTML-rich on brew.is (the Korntegund / Humlategund metadata
+    # at the bottom is the most useful signal).
+    desc_raw = re.sub(r"<[^>]+>", " ", product.get("description") or "")
+    desc = normalise(desc_raw)
+    text = f" {name} {desc} "         # pad so " ger " whole-word checks work
+    out: set[str] = set()
+    for t, tokens in _FALLBACK_TOKENS.items():
+        if any(tok in text for tok in tokens):
+            out.add(t)
+    return out
 
 
 # ---------------------------------------------------------------------------
