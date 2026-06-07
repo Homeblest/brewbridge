@@ -26,7 +26,6 @@ from __future__ import annotations
 import datetime as dt
 import json
 import sqlite3
-from pathlib import Path
 from typing import Any
 
 from . import beersmith as bs
@@ -161,8 +160,13 @@ def clone_recipe(conn: sqlite3.Connection, recipe_id: int,
 
     cols = list(new_row.keys())
     ph = ",".join("?" for _ in cols)
+    # Build the column-list string with explicit concatenation rather
+    # than nested f-strings with backslashes — Python 3.10 / 3.11 don't
+    # allow backslashes inside f-string expressions, and we claim
+    # >=3.10 in pyproject.toml.
+    quoted_cols = ",".join('"' + c + '"' for c in cols)
     cur.execute(
-        f'INSERT INTO M_RECIPE ({",".join(f"""\"{c}\"""" for c in cols)}) VALUES ({ph})',
+        f"INSERT INTO M_RECIPE ({quoted_cols}) VALUES ({ph})",
         [new_row[c] for c in cols],
     )
     new_id = cur.lastrowid

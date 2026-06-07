@@ -17,7 +17,6 @@ binary).
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
@@ -100,8 +99,6 @@ def _parse_swap_args(swaps_list: list[str]) -> list[tuple[str, str]]:
 
 def _handle_clone(conn, recipe_row, swaps):
     import re
-    import datetime as dt
-    from brewbridge.core import beersmith as bs
     from brewbridge.core import platform as bb_platform
     from brewbridge.core import recipes
 
@@ -170,6 +167,7 @@ def cmd_install(args):
         sys.exit(f"  install failed: {e}")
     print(f"  brewis:// handler   -> {s['protocol_command']}")
     print(f"  Report template     -> {s['report_template']}")
+    print(f"  Daily sync task     -> {s.get('scheduled_task', 'not registered')}")
     if "mash_profile_added" in s:
         print(f"  Brew.is einfaldur (M_MASH)   -> "
               f"{'added' if s['mash_profile_added'] else 'already present'}")
@@ -186,6 +184,15 @@ def cmd_install(args):
 def cmd_tray(args):
     from brewbridge import tray
     tray.main()
+
+
+def cmd_doctor(args):
+    """Read-only install verifier. Returns exit code 1 if any check
+    failed so this can be wired into pre-flight checks."""
+    from brewbridge.core import doctor
+    print("brewbridge doctor — checking install")
+    print()
+    sys.exit(doctor.print_report(doctor.run()))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -229,6 +236,10 @@ def main(argv: list[str] | None = None) -> int:
 
     t = sub.add_parser("tray", help="launch the system-tray icon")
     t.set_defaults(func=cmd_tray)
+
+    d = sub.add_parser("doctor",
+                       help="verify install — protocol, template, library, sync")
+    d.set_defaults(func=cmd_doctor)
 
     args = ap.parse_args(argv)
     try:

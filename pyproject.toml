@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "brewbridge"
-version = "0.1.1"
+version = "0.1.2"
 description = "Sync brew.is in-stock ingredients into BeerSmith 4, import recipes, and fill the /uppskriftir Recipe Machine in one click."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -62,3 +62,9 @@ addopts = "-v --tb=short"
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.ruff.lint]
+# E702 (multiple-statements-on-one-line via semicolon) — used
+# deliberately in tray.py for compact widget-pack sequences and in
+# recipes.py for tight import blocks. Stylistic preference; not a bug.
+ignore = ["E702"]

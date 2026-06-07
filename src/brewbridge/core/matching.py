@@ -31,7 +31,6 @@ import re
 import unicodedata
 from difflib import SequenceMatcher
 from html import unescape
-from typing import Iterable
 
 # ---------------------------------------------------------------------------
 # Phrase aliases & token translations

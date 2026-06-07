@@ -28,7 +28,6 @@ import re
 import sqlite3
 import urllib.parse
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from . import beersmith as bs
 from . import matching as mm

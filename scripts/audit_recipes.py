@@ -96,11 +96,17 @@ def main():
 
         # Parse style range
         style_blob = r["F_R_STYLE"] or ""
-        style_name = re.search(r'"F_S_NAME":"([^"]+)"', style_blob)
-        s_min_og = re.search(r'"F_S_MIN_OG":"([^"]+)"', style_blob)
-        s_max_og = re.search(r'"F_S_MAX_OG":"([^"]+)"', style_blob)
-        s_min_ibu = re.search(r'"F_S_MIN_IBU":"([^"]+)"', style_blob)
-        s_max_ibu = re.search(r'"F_S_MAX_IBU":"([^"]+)"', style_blob)
+        # Tolerant regex: BeerSmith stores F_R_STYLE either as compact JSON
+        # ("key":"value", no spaces) or as standard JSON ("key": "value",
+        # with spaces). Each recipe row may use either depending on which
+        # writer last touched it. Accept any whitespace after the colon
+        # so we don't false-report "(no style)" for recipes that just
+        # happen to have a space-padded blob.
+        style_name = re.search(r'"F_S_NAME"\s*:\s*"([^"]+)"', style_blob)
+        s_min_og = re.search(r'"F_S_MIN_OG"\s*:\s*"([^"]+)"', style_blob)
+        s_max_og = re.search(r'"F_S_MAX_OG"\s*:\s*"([^"]+)"', style_blob)
+        s_min_ibu = re.search(r'"F_S_MIN_IBU"\s*:\s*"([^"]+)"', style_blob)
+        s_max_ibu = re.search(r'"F_S_MAX_IBU"\s*:\s*"([^"]+)"', style_blob)
 
         style = style_name.group(1) if style_name else "(no style)"
         og_in_range = True

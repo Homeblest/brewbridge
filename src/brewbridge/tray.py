@@ -170,7 +170,6 @@ def _open_picker():
     """Picker window listing every BeerSmith recipe. Runs in the tray
     process; uses Tk because pystray is event-loop-driven and this is the
     cleanest way to get a dialog up."""
-    import sqlite3
     root = tk.Tk()
     root.title("Panta uppskrift frá brew.is")
     root.geometry("560x500")

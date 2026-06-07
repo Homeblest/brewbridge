@@ -1,0 +1,60 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-progress runs when a new commit lands on the same ref.
+# CI is read-only here so this is purely a cost/wait-time saver.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    # Matrix on the two OS targets and three Python versions we claim
+    # to support. We don't actually build the MSI here — that needs
+    # WiX, and we don't sign anyway, so the integration value is low
+    # vs. the setup cost.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+        python: ["3.10", "3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Install package + test deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+
+      - name: Run tests
+        # Windows: BeerSmith isn't installed on the runner; that's fine,
+        # every test uses in-memory SQLite fixtures or monkey-patched
+        # paths. test_platform / test_classify_product / test_sync_state
+        # are platform-agnostic by design.
+        run: python -m pytest tests/ -v
+
+  lint:
+    # Only ruff for now — it's fast, opinionated, and we've been writing
+    # to its defaults. Type-checking with mypy/pyright would catch more
+    # but the cost-to-value ratio at this stage isn't there.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install ruff
+      - run: ruff check src/ tests/

@@ -18,8 +18,6 @@ Refuses to write to ``BeerSmith.sqlite`` while BeerSmith is open."""
 from __future__ import annotations
 
 import datetime as dt
-import json
-import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -274,6 +272,69 @@ def install_water_profile(conn: sqlite3.Connection) -> bool:
 # Top-level installer
 # ---------------------------------------------------------------------------
 
+SCHEDULED_TASK_NAME = "BrewbridgeSync"
+
+
+def install_scheduled_task(at: str = "06:00") -> str:
+    """Register a per-user Scheduled Task that runs ``brewbridge sync``
+    every day at ``at`` (HH:MM, local time). Idempotent — re-running
+    deletes any existing task with the same name first.
+
+    Per-user (not /SC ONIDLE or system-wide) because brewbridge state
+    lives in the user's profile and BeerSmith.sqlite is in %APPDATA%.
+    No /RU SYSTEM either — needs to run as the actual user.
+
+    Returns the task command string for the install summary.
+    """
+    if not sys.platform == "win32":
+        return "skipped (scheduled tasks via brewbridge are Windows-only)"
+
+    import subprocess
+
+    # Find the brewbridge CLI executable. In a frozen build this is the
+    # exe next to the running process; in a source install this is the
+    # `brewbridge` script that pip installed alongside python.
+    if getattr(sys, "frozen", False):
+        cli = sys.executable
+        cmd = f'"{cli}" sync'
+    else:
+        # `python -m brewbridge sync` works from any source install
+        cmd = f'"{sys.executable}" -m brewbridge sync'
+
+    # schtasks.exe is available on every Windows since Vista. /F forces
+    # overwrite if the task already exists. /SC DAILY + /ST HH:MM is the
+    # simplest possible schedule shape.
+    args = [
+        "schtasks", "/Create", "/F",
+        "/TN", SCHEDULED_TASK_NAME,
+        "/TR", cmd,
+        "/SC", "DAILY",
+        "/ST", at,
+    ]
+    # capture output so we can include the schtasks error in any
+    # RuntimeError we raise; otherwise it'd just hit stderr and vanish
+    # in a frozen-bundle context.
+    proc = subprocess.run(args, capture_output=True, text=True)
+    if proc.returncode != 0:
+        # Don't fail the whole install over the schedule — the rest of
+        # the setup (protocol handler, report template, profiles) is
+        # more important. Surface the issue in the summary so the user
+        # can re-register it manually if they care.
+        msg = (proc.stderr or proc.stdout or "").strip().splitlines()[-1:]
+        return f"FAILED ({' | '.join(msg)})"
+    return cmd
+
+
+def uninstall_scheduled_task() -> None:
+    """Best-effort removal of the daily-sync task. Used by uninstall
+    flows; ignores errors (task may not exist)."""
+    if sys.platform != "win32":
+        return
+    import subprocess
+    subprocess.run(["schtasks", "/Delete", "/F", "/TN", SCHEDULED_TASK_NAME],
+                    capture_output=True)
+
+
 def install_all(*, db_path: Path = bs.DEFAULT_DB_PATH,
                   reports_dir: Path = bs.DEFAULT_REPORTS_DIR,
                   skip_db: bool = False) -> dict:
@@ -281,6 +342,7 @@ def install_all(*, db_path: Path = bs.DEFAULT_DB_PATH,
     summary: dict = {}
     summary["protocol_command"] = register_protocol()
     summary["report_template"] = install_report_template(reports_dir)
+    summary["scheduled_task"] = install_scheduled_task()
     if skip_db:
         return summary
     if bs.is_running():

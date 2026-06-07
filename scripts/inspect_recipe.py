@@ -107,12 +107,15 @@ def main():
 
     # Style block — pull just the headline from the embedded JSON
     style = r["F_R_STYLE"] or ""
-    name = re.search(r'"F_S_NAME":"([^"]+)"', style)
-    cat = re.search(r'"F_S_CATEGORY":"([^"]+)"', style)
-    min_ibu = re.search(r'"F_S_MIN_IBU":"([^"]+)"', style)
-    max_ibu = re.search(r'"F_S_MAX_IBU":"([^"]+)"', style)
-    min_og = re.search(r'"F_S_MIN_OG":"([^"]+)"', style)
-    max_og = re.search(r'"F_S_MAX_OG":"([^"]+)"', style)
+    # Tolerant regex: F_R_STYLE may be compact JSON ("key":"value") or
+    # standard JSON ("key": "value") depending on which writer last
+    # touched it. Accept any whitespace around the colon.
+    name = re.search(r'"F_S_NAME"\s*:\s*"([^"]+)"', style)
+    cat = re.search(r'"F_S_CATEGORY"\s*:\s*"([^"]+)"', style)
+    min_ibu = re.search(r'"F_S_MIN_IBU"\s*:\s*"([^"]+)"', style)
+    max_ibu = re.search(r'"F_S_MAX_IBU"\s*:\s*"([^"]+)"', style)
+    min_og = re.search(r'"F_S_MIN_OG"\s*:\s*"([^"]+)"', style)
+    max_og = re.search(r'"F_S_MAX_OG"\s*:\s*"([^"]+)"', style)
     if name:
         print(f"Style:  {name.group(1)} ({cat.group(1) if cat else '?'})")
         if min_ibu and max_ibu:
