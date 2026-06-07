@@ -176,6 +176,7 @@ def cmd_install(args):
     print(f"  brewis:// handler   -> {s['protocol_command']}")
     print(f"  Report template     -> {s['report_template']}")
     print(f"  Daily sync task     -> {s.get('scheduled_task', 'not registered')}")
+    print(f"  Playwright Chromium -> {s.get('chromium', 'not attempted')}")
     if "mash_profile_added" in s:
         print(f"  Brew.is einfaldur (M_MASH)   -> "
               f"{'added' if s['mash_profile_added'] else 'already present'}")

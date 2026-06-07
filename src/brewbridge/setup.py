@@ -143,7 +143,7 @@ _REPORT_TEMPLATE = """<html><head>
     <div><div class="item">Beiskja</div>$IBU</div>
     <div><div class="item">Litur</div>$EST_COLOR</div>
   </div>
-  <a class="cta" href="brewis://order/$NAME">&#9654; Yfirfara og panta hj&aacute; brew.is</a>
+  <a class="cta" href="brewis://order/$NAME/cart">&#9654; Panta hj&aacute; brew.is (fylla Uppskriftav&eacute;lina)</a>
   <div class="note">
     Hnappurinn opnar innkaupalista &iacute; vafranum sem ber saman uppskriftina vi&eth; vah&ouml;rulista
     brew.is. Ef &ouml;ll hr&aacute;efni eru til er hnappur &thorn;ar virkur sem opnar Uppskriftav&eacute;lina
@@ -335,6 +335,69 @@ def uninstall_scheduled_task() -> None:
                     capture_output=True)
 
 
+def install_chromium() -> str:
+    """Make sure Playwright's Chromium browser is downloaded.
+
+    Playwright the Python package is bundled into the MSI (~10 MB) but
+    the actual Chromium binary (~150 MB) is NOT — that's a separate
+    download per the standard Playwright distribution model. This
+    function runs the equivalent of ``playwright install chromium``
+    using the bundled-CLI shim, so users who installed via MSI get the
+    headline "fill brew.is Recipe Machine" feature working without
+    needing pip.
+
+    Idempotent — if Chromium is already in the user's Playwright cache,
+    Playwright's installer no-ops. Skipped on non-Windows (mac users
+    install Chromium via their .app build flow; Linux isn't a target).
+
+    Returns a status string for the install summary. Errors are caught
+    and stringified rather than raised — Chromium failing to download
+    shouldn't break the rest of the install (the user can re-run
+    `brewbridge install` later when they have a working network).
+    """
+    if sys.platform != "win32":
+        return "skipped (not on Windows)"
+    # Direct Playwright at the user's cache directory rather than the
+    # frozen install's `_internal/playwright/.../package/.local-browsers`
+    # (which would require admin to write to AND moves with the install).
+    # %LOCALAPPDATA%\ms-playwright is the platform-default cache the
+    # standalone Playwright CLI uses too, so users get the same location
+    # whether they install via MSI or via pip — and `brewbridge` itself
+    # is forced through the same env in fill_recipe_machine so the two
+    # halves agree on where Chromium lives.
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(
+        Path(os.path.expandvars(r"%LOCALAPPDATA%\ms-playwright"))
+    )
+    try:
+        # Playwright's `install chromium` command is exposed as a Python
+        # entry point (playwright.__main__). Calling it in-process avoids
+        # the frozen-vs-source subprocess shape mismatch — sys.argv just
+        # needs the right shape and playwright's main handles the rest,
+        # including locating its bundled node.exe + cli.js inside the
+        # PyInstaller bundle.
+        import playwright.__main__ as pw_main
+        # The main() function reads sys.argv directly, so we patch it.
+        # SystemExit is the normal return path — Playwright's CLI exits
+        # with 0 on success.
+        old_argv = sys.argv
+        try:
+            sys.argv = ["playwright", "install", "chromium"]
+            try:
+                pw_main.main()
+                return "installed (or already present)"
+            except SystemExit as e:
+                if e.code in (0, None):
+                    return "installed (or already present)"
+                return f"FAILED (playwright exited {e.code})"
+        finally:
+            sys.argv = old_argv
+    except ImportError:
+        return ("FAILED (playwright not bundled — rebuild MSI from "
+                "v0.1.4 source)")
+    except Exception as e:
+        return f"FAILED ({e!r})"
+
+
 def install_all(*, db_path: Path = bs.DEFAULT_DB_PATH,
                   reports_dir: Path = bs.DEFAULT_REPORTS_DIR,
                   skip_db: bool = False) -> dict:
@@ -343,6 +406,7 @@ def install_all(*, db_path: Path = bs.DEFAULT_DB_PATH,
     summary["protocol_command"] = register_protocol()
     summary["report_template"] = install_report_template(reports_dir)
     summary["scheduled_task"] = install_scheduled_task()
+    summary["chromium"] = install_chromium()
     if skip_db:
         return summary
     if bs.is_running():

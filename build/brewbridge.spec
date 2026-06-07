@@ -65,11 +65,15 @@ cli_a = Analysis(
     hookspath=[],
     runtime_hooks=[],
     excludes=[
-        # Playwright is a runtime dependency installed via the user's own
-        # `pip install playwright` + `playwright install chromium` step.
-        # Bundling it would balloon the MSI to ~200 MB and the Chromium
-        # download is post-install anyway. Treat as an optional runtime.
-        "playwright",
+        # Playwright was excluded in 0.1.0–0.1.3 to keep MSI size down,
+        # under the assumption that users would `pip install playwright`
+        # themselves. That broke the headline "fill Chromium with the
+        # form" feature for MSI users (no pip available, the import
+        # failed silently inside fill_recipe_machine). Now bundled —
+        # adds ~10 MB to the MSI for the Python package. The actual
+        # Chromium browser binary (~150 MB) is still downloaded
+        # post-install via `brewbridge install` (calls
+        # `playwright install chromium` if the user's cache is empty).
     ],
     noarchive=False,
 )
@@ -86,7 +90,7 @@ tray_a = Analysis(
     ],
     hookspath=[],
     runtime_hooks=[],
-    excludes=["playwright"],
+    excludes=[],
     noarchive=False,
 )
 

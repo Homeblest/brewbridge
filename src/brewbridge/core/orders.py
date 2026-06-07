@@ -340,6 +340,16 @@ def fill_recipe_machine(lines: list[OrderLine], *, headless: bool = False) -> bo
     """Drive Playwright: open /uppskriftir, drop the order into the textarea.
     Leaves the browser open so the user reviews and clicks Næsta skref."""
     text = "\n".join(textarea_line(L) for L in lines if L.match)
+    # Tell Playwright to look for browsers in the user's standard cache,
+    # not the frozen install's bundle-local .local-browsers directory.
+    # `brewbridge install` downloads Chromium into the same path so this
+    # is the canonical location. Set BEFORE the playwright import so any
+    # module-level path resolution sees it.
+    import os as _os
+    _os.environ.setdefault(
+        "PLAYWRIGHT_BROWSERS_PATH",
+        _os.path.expandvars(r"%LOCALAPPDATA%\ms-playwright"),
+    )
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
@@ -417,6 +427,9 @@ _HTML = """<!doctype html>
  .cta:hover{{background:#1466ad}}
  .cta.disabled{{background:#bbb;color:#fff;cursor:not-allowed;pointer-events:none;
         font-weight:600}}
+ .cta-fallback{{display:inline-block;color:#1a7ed6;text-decoration:none;
+        margin-left:1.2em;font-size:0.95em;border-bottom:1px dotted #1a7ed6}}
+ .cta-fallback:hover{{color:#1466ad;border-bottom-style:solid}}
  a.clone-btn{{display:inline-block;background:#28a745;color:white;
         padding:1px 8px;border-radius:4px;text-decoration:none;
         font-size:12px;margin-left:6px;font-weight:600}}
@@ -478,11 +491,32 @@ def render_html(recipe_name: str, batch_l: float, lines: list[OrderLine],
 
     blockers = compute_blockers(lines, nomatch, catalog) if catalog else []
     block_html = _render_blockers(blockers, recipe_id) if blockers else ""
-    cta_html = (f'<a class="cta" href="brewis://order/{recipe_id}/cart">'
-                f'Opna á brew.is (fylla Uppskriftavélina)</a>'
-                if not blockers else
-                '<span class="cta disabled" title="Vantar hráefni — sjá ofan">'
-                'Ekki hægt að panta sjálfvirkt</span>')
+    # CTA is a pair of links, primary + fallback:
+    #   - Primary: brewis://order/<id>/cart triggers the brewbridge protocol
+    #     handler, which launches Chromium and pre-fills brew.is's Recipe
+    #     Machine via Playwright. Same shape as any "Open in App" link
+    #     (slack://, vscode://). Works only if `brewbridge install` has
+    #     registered the protocol — which it has, for any user who's run
+    #     the install step.
+    #   - Fallback: a regular https://www.brew.is/uppskriftir link, so
+    #     users whose system isn't set up for the protocol — or who
+    #     simply prefer to fill the form themselves — still have a path
+    #     forward. Pairs with the in-page ingredient list above (already
+    #     rendered) which they can copy-paste into the brew.is form.
+    if not blockers:
+        cta_html = (
+            f'<a class="cta" href="brewis://order/{recipe_id}/cart">'
+            f'&#9654; Fylla Uppskriftavélina sjálfvirkt</a>'
+            f'<a class="cta-fallback" href="https://www.brew.is/uppskriftir" '
+            f'target="_blank" rel="noopener">eða opna brew.is handvirkt &rarr;</a>'
+        )
+    else:
+        cta_html = (
+            '<span class="cta disabled" title="Vantar hráefni — sjá ofan">'
+            'Ekki hægt að panta sjálfvirkt</span>'
+            f'<a class="cta-fallback" href="https://www.brew.is/uppskriftir" '
+            f'target="_blank" rel="noopener">opna brew.is handvirkt &rarr;</a>'
+        )
     pantry_html = _render_pantry(pantry or [])
 
     return _HTML.format(
