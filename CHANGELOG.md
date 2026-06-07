@@ -4,6 +4,61 @@ All notable changes to brewbridge. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] — 2026-06-07
+
+**First release where the headline feature — "click order in BeerSmith,
+brew.is Recipe Machine opens pre-filled" — actually works end-to-end
+for MSI users.** Earlier releases shipped with the click broken in
+ways that only surfaced under real-world testing.
+
+### Fixed
+
+- **BeerSmith report button now fires `brewis://order/<NAME>/cart`
+  instead of `brewis://order/<NAME>`** — so a single click in the
+  report viewer goes straight to fill mode (Chromium opens with the
+  brew.is form pre-filled). The old URL went to "report mode" which
+  generated an HTML order sheet; that sheet had its own CTA at
+  `brewis://order/<id>/cart` but **Chrome / Edge silently block
+  custom-protocol activations from `file://` origins** for security
+  reasons, so the click was a no-op. The HTML order sheet is still
+  generated for users who want to review the order; clicking the
+  BeerSmith button is now the action path, not the preview path.
+
+- **Playwright is now bundled in the MSI.** Earlier versions excluded
+  it to keep the MSI under 20 MB, on the assumption users would
+  `pip install playwright` themselves. MSI users don't have pip, and
+  `fill_recipe_machine`'s ImportError fallback printed to a console
+  that flashes and disappears. MSI is now 49.8 MB (up from 17.9 MB).
+
+- **`PLAYWRIGHT_BROWSERS_PATH` is now pinned consistently** to
+  `%LOCALAPPDATA%\ms-playwright` in both the install side
+  (`brewbridge install` runs `playwright install chromium`) and the
+  runtime side (`fill_recipe_machine`). Without this, bundled
+  Playwright looked at `C:\Program Files\brewbridge\_internal\...\
+  .local-browsers\` (read-only, doesn't exist) while the install
+  step had downloaded Chromium to the user cache — the two halves
+  disagreed and the launch failed with `BrowserType.launch:
+  Executable doesn't exist`.
+
+### Added
+
+- **`brewbridge install` now installs Playwright's Chromium browser**
+  via the Python entry point (`playwright.__main__:main`). One-time
+  ~150 MB download into the user's standard Playwright cache. Surfaces
+  in the install summary as `Playwright Chromium -> installed (or
+  already present)`. Skipped on non-Windows.
+
+- **HTML order sheet CTA now has a https:// fallback** so users who
+  hit it via the tray's "Sýna innkaupalista (HTML)" picker still have
+  a path forward when Chrome blocks the protocol activation. Styled
+  as a subtle secondary link, not a button.
+
+### Known limitations carried forward
+
+- The MSI is still unsigned — Windows SmartScreen warns on first launch.
+- macOS path still untested on real hardware.
+- No bulk recipe import; users create recipes themselves in BeerSmith.
+
 ## [0.1.3] — 2026-06-07
 
 ### Changed (breaking-ish)
