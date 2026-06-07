@@ -205,7 +205,26 @@ def _open_picker():
             return
         rid = rows[sel[0]]["_PERMID_"]
         url = f"brewis://order/{rid}" + ("/cart" if mode.get() == "fill" else "")
-        subprocess.Popen([sys.executable, "-m", "brewbridge", "order", url],
+        # Frozen build vs source install need different subprocess shapes.
+        #
+        # In a frozen tray, sys.executable is brewbridge-tray.exe — passing
+        # it `-m brewbridge order <url>` doesn't work because the tray
+        # entry script ignores argv and just calls tray.main(), which
+        # opens *another* tray icon. That was producing two symptoms at
+        # once: (a) duplicate tray icons stacking after each picker use,
+        # and (b) "Chrome doesn't open when I pick a recipe" — the order
+        # command never actually ran.
+        #
+        # Fix: detect frozen mode and invoke the sibling brewbridge.exe
+        # directly with the URL as its sole arg. __main__.main routes
+        # bare brewis:// URLs straight to the order subcommand, same as
+        # the Windows URL handler does.
+        if getattr(sys, "frozen", False):
+            cli = Path(sys.executable).parent / "brewbridge.exe"
+            cmd = [str(cli), url]
+        else:
+            cmd = [sys.executable, "-m", "brewbridge", "order", url]
+        subprocess.Popen(cmd,
                          creationflags=bb_platform.detached_console_flag())
         root.destroy()
 
@@ -293,6 +312,37 @@ def _action_quit(icon):
 # Entry point
 # ---------------------------------------------------------------------------
 
+def _acquire_singleton():
+    """Make sure only one brewbridge tray runs at a time.
+
+    Windows: use a named kernel mutex. CreateMutexW returns a handle and
+    sets ERROR_ALREADY_EXISTS (183) on the second caller. If we get
+    that, another tray instance is alive — bail. Otherwise hold the
+    handle for the process lifetime so the kernel keeps the mutex
+    alive on our behalf (closing the handle would release it).
+
+    macOS / Linux: no-op for now. mac singleton would use NSRunningApplication
+    or a lockfile; we'll wire it when the .app path is verified on real
+    hardware. (See task #29.)
+
+    Returns the mutex handle on success (caller must keep the reference),
+    or ``None`` if another instance owns it.
+    """
+    if not bb_platform.is_windows():
+        return True   # truthy sentinel — no real handle on non-Windows
+
+    import ctypes
+    ERROR_ALREADY_EXISTS = 183
+    kernel32 = ctypes.windll.kernel32
+    # Use a fixed, well-known name. Don't prefix Global\\ — that would
+    # require admin and apply across user sessions, which we don't want.
+    # Per-user (default Local namespace) is correct.
+    h = kernel32.CreateMutexW(None, False, "brewbridge_tray_singleton_v1")
+    if kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
+        return None
+    return h
+
+
 def main():
     try:
         import pystray
@@ -300,6 +350,20 @@ def main():
     except ImportError:
         print("pystray not installed — pip install pystray pillow", file=sys.stderr)
         sys.exit(1)
+
+    # Singleton: refuse to launch a second tray. The picker's subprocess
+    # bug used to spawn duplicate trays as a side-effect; that's fixed,
+    # but this catches the human case (double-clicking the Start Menu
+    # shortcut, or a leftover tray + a fresh launch) too.
+    _mutex_handle = _acquire_singleton()
+    if _mutex_handle is None:
+        # Use the file logger so this trail exists in tray.log if a user
+        # ever wonders why their tray "didn't open".
+        try:
+            raise RuntimeError("brewbridge tray already running")
+        except RuntimeError:
+            _tray_log.log_exception("singleton")
+        sys.exit(0)
 
     icon = pystray.Icon(
         "brewbridge",

@@ -121,9 +121,22 @@ if (-not $NoClean) {
 # ---------------------------------------------------------------------------
 # 3. PyInstaller
 # ---------------------------------------------------------------------------
+# PyInstaller writes its INFO-level log to stderr by convention. Under
+# $ErrorActionPreference = "Stop" (set at the top of this script),
+# PowerShell turns ANY stderr line from a native command into a
+# terminating NativeCommandError *before* a redirect operator can
+# capture it. The fix is to locally relax ErrorActionPreference around
+# the native invocation — $LASTEXITCODE is still set by the child and
+# we explicitly check it afterwards, so we don't lose error detection.
 Write-Step "Running PyInstaller"
-& $python -m PyInstaller --clean --noconfirm --distpath dist --workpath build\pyi build\brewbridge.spec
-if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+    & $python -m PyInstaller --clean --noconfirm --distpath dist --workpath build\pyi build\brewbridge.spec
+} finally {
+    $ErrorActionPreference = $prevEAP
+}
+if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed (exit $LASTEXITCODE)" }
 
 $distDir = Join-Path $repoRoot "dist\brewbridge"
 if (-not (Test-Path "$distDir\brewbridge.exe") -or -not (Test-Path "$distDir\brewbridge-tray.exe")) {
@@ -164,8 +177,14 @@ $wixArgs = @(
     "-ext", "WixToolset.UI.wixext",
     "-o", $msi
 )
-& wix @wixArgs
-if ($LASTEXITCODE -ne 0) { throw "wix build failed" }
+$prevEAP = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+try {
+    & wix @wixArgs
+} finally {
+    $ErrorActionPreference = $prevEAP
+}
+if ($LASTEXITCODE -ne 0) { throw "wix build failed (exit $LASTEXITCODE)" }
 
 if (-not (Test-Path $msi)) {
     throw "wix reported success but $msi was not produced"
