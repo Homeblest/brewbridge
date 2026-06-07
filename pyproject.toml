@@ -1,10 +1,10 @@
-[build-system]
+﻿[build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "brewbridge"
-version = "0.1.4"
+version = "0.1.5"
 description = "Sync brew.is in-stock ingredients into BeerSmith 4, import recipes, and fill the /uppskriftir Recipe Machine in one click."
 readme = "README.md"
 license = { file = "LICENSE" }

@@ -514,8 +514,8 @@ def render_html(recipe_name: str, batch_l: float, lines: list[OrderLine],
         cta_html = (
             '<span class="cta disabled" title="Vantar hráefni — sjá ofan">'
             'Ekki hægt að panta sjálfvirkt</span>'
-            f'<a class="cta-fallback" href="https://www.brew.is/uppskriftir" '
-            f'target="_blank" rel="noopener">opna brew.is handvirkt &rarr;</a>'
+            '<a class="cta-fallback" href="https://www.brew.is/uppskriftir" '
+            'target="_blank" rel="noopener">opna brew.is handvirkt &rarr;</a>'
         )
     pantry_html = _render_pantry(pantry or [])
 

@@ -244,10 +244,25 @@ def _open_picker():
 def _action_sync(icon):
     """Run a catalog sync in a background thread; refresh icon when done.
 
+    Pre-flight: if BeerSmith is open we bail with a friendly notification
+    asking the user to close it. The underlying sync.run() raises the
+    same RuntimeError, but going through the friendlier message saves
+    the user from "Sync failed — see tray.log" with no actionable
+    explanation.
+
     On success: if any recipes flipped from blocked → orderable, fire a
     notification naming them (truncated to the first 3 with a "+N" tail
     when longer). If nothing flipped, generic "complete" toast.
     """
+    # Pre-flight check. bs.is_running() does a process-list scan, which
+    # is fast (~50 ms) so it's fine on the main thread.
+    if bs.is_running():
+        icon.notify(
+            "Vinsamlegast lokaðu BeerSmith áður en þú samrúmir. "
+            "BeerSmith heldur gagnagrunninum opnum og lokar fyrir uppfærslur.",
+            "brew.is sync — bíður eftir BeerSmith",
+        )
+        return
     icon.notify("Brew.is sync started...", "brewbridge")
     # The sync result needs to survive across threads — _run_in_thread
     # passes `ok` (bool) to the done callback but not the return value.
@@ -305,6 +320,45 @@ def _action_open_folder(icon):
 
 def _action_quit(icon):
     icon.stop()
+
+
+def _start_state_watcher(icon) -> None:
+    """Daemon thread that keeps the tray icon in sync with last_sync.txt.
+
+    The previous design only re-rendered the icon inside _action_sync's
+    `done` callback — so when a sync ran from somewhere ELSE (CLI,
+    scheduled task, an external script), the tray's icon stayed stale
+    until the user clicked "Synca núna" themselves. Result: user ran
+    `brewbridge sync` from PowerShell, sync succeeded, last_sync.txt
+    flipped to "ok", icon stayed red until next tray-driven action.
+
+    This watcher polls last_sync.txt's mtime every 30 seconds. If it
+    changed since the last check, it re-renders the icon. Cheap (an
+    os.stat call) and the polling interval is long enough not to be
+    noticeable battery / CPU drain.
+    """
+    import time
+
+    def loop():
+        last_mtime: float = 0.0
+        while True:
+            try:
+                if LAST_SYNC_FILE.exists():
+                    mtime = LAST_SYNC_FILE.stat().st_mtime
+                    if mtime != last_mtime:
+                        last_mtime = mtime
+                        # Re-render icon based on current state. pystray
+                        # propagates the change to the OS icon
+                        # automatically when you assign to icon.icon.
+                        icon.icon = _make_icon_image(_sync_state())
+            except Exception:
+                # Watcher must NEVER crash the tray — silently swallow
+                # any error (likely a transient file-lock from a sync
+                # writing the file). Worst case we miss this iteration.
+                pass
+            time.sleep(30)
+
+    threading.Thread(target=loop, daemon=True).start()
 
 
 # ---------------------------------------------------------------------------
@@ -378,6 +432,10 @@ def main():
             Item("Hætta", _action_quit),
         ),
     )
+    # Background poll of last_sync.txt so CLI / scheduled-task syncs
+    # also flip the icon colour. Without this, the icon goes stale
+    # the moment any sync runs outside the tray.
+    _start_state_watcher(icon)
     icon.run()
 
 

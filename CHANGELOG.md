@@ -4,6 +4,29 @@ All notable changes to brewbridge. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] — 2026-06-07
+
+Tray UX polish — fixes two papercuts users hit immediately on their
+first real use of v0.1.4.
+
+### Fixed
+
+- **Tray icon stuck red after a successful CLI/cron sync.** The
+  previous design only refreshed the icon inside `_action_sync.done()`,
+  so any sync that ran outside the tray (CLI invocation, scheduled
+  task, external script) left the icon stale until the user clicked
+  Synca núna themselves. A background thread now polls
+  `~/.brewbridge/last_sync.txt`'s mtime every 30 s and re-renders the
+  icon when the state file changes. The watcher swallows any error
+  silently — losing one poll is fine, killing the tray over it isn't.
+
+- **"BeerSmith is running" failure was unfriendly.** Clicking Synca
+  núna with BeerSmith open used to invoke sync, hit the RuntimeError,
+  and surface "Sync failed — see tray.log" to the user. The tray now
+  checks `bs.is_running()` upfront and shows a friendly Icelandic
+  notification ("Vinsamlegast lokaðu BeerSmith áður en þú samrúmir...")
+  asking them to close BeerSmith. No log dig required.
+
 ## [0.1.4] — 2026-06-07
 
 **First release where the headline feature — "click order in BeerSmith,

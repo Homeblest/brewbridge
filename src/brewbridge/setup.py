@@ -18,6 +18,7 @@ Refuses to write to ``BeerSmith.sqlite`` while BeerSmith is open."""
 from __future__ import annotations
 
 import datetime as dt
+import os
 import sqlite3
 import sys
 from pathlib import Path
