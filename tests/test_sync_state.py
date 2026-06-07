@@ -66,6 +66,21 @@ def test_record_sync_state_creates_data_dir_if_missing(monkeypatch, tmp_path):
     assert (missing_dir / "last_sync.txt").exists()
 
 
+def test_run_purge_builtins_defaults_to_false():
+    """Pin the v0.1.3 default change. The previous default deleted every
+    non-(brew.is) library row on first sync — an experienced BeerSmith
+    user installing brewbridge would silently lose their custom hops,
+    yeasts, and grains. Non-destructive is now the default; the
+    destructive mode is gated behind --brew-is-only.
+    """
+    import inspect
+    sig = inspect.signature(bb_sync.run)
+    assert sig.parameters["purge_builtins"].default is False, (
+        "sync.run() must default to non-destructive (purge_builtins=False). "
+        "Destructive mode should require explicit opt-in via the "
+        "--brew-is-only CLI flag.")
+
+
 def test_run_records_failed_on_exception(monkeypatch, tmp_path):
     """sync.run() wraps _run_inner; any exception triggers a 'failed'
     write before re-raising. Without this, CLI sync that fails leaves

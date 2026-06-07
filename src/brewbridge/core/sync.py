@@ -259,14 +259,18 @@ def _row_for(t: str, name: str, matched: dict | None, template: dict,
 # Top-level entry point
 # ---------------------------------------------------------------------------
 
-def run(*, db_path: Path = bs.DEFAULT_DB_PATH, purge_builtins: bool = True,
+def run(*, db_path: Path = bs.DEFAULT_DB_PATH, purge_builtins: bool = False,
         report_dir: Path | None = None) -> SyncResult:
     """Execute one sync. Raises RuntimeError if BeerSmith is running.
 
     purge_builtins: if True, non-(brew.is) ingredient rows are also deleted
     each run, keeping the library brew.is-only (best for a homebrewer whose
-    only supplier is brew.is). If False, leaves built-in libraries intact and
-    only manages the (brew.is)-tagged rows.
+    only supplier is brew.is). If False (the default since v0.1.3), leaves
+    every existing library row untouched and only adds / refreshes the
+    (brew.is)-tagged rows. The old default was destructive: an experienced
+    BeerSmith user installing brewbridge for the first time would lose
+    every custom hop / yeast / grain they'd added over years. We always
+    take a BeerSmith.sqlite backup before any write either way.
 
     Always records sync outcome to ``~/.brewbridge/last_sync.txt`` — on
     success ("ok") at the end, on any raised exception ("failed") via the

@@ -32,10 +32,18 @@ def _reconfigure_stdout():
 
 def cmd_sync(args):
     from brewbridge.core import sync
-    res = sync.run(purge_builtins=not args.keep_builtins)
+    # purge_builtins defaults to OFF as of v0.1.3 — the destructive mode
+    # is gated behind an explicit --brew-is-only flag. --keep-builtins
+    # stayed in the parser as a no-op so old scripts don't break.
+    res = sync.run(purge_builtins=args.brew_is_only)
     print(f"\n  inserted: {sum(res.inserted.values())} rows "
           f"(grain {res.inserted['grain']}, hops {res.inserted['hops']}, "
           f"yeast {res.inserted['yeast']}, misc {res.inserted['misc']})")
+    if res.deleted:
+        # Make destructive runs unambiguous — the user passed --brew-is-only
+        # so this number is expected, but printing it removes the "wait, did
+        # something just disappear?" surprise.
+        print(f"  deleted:  {res.deleted} rows (brew.is-only mode)")
     print(f"  matched specs: {res.matched} / {res.products}")
     print(f"  backup: {res.backup}")
     print(f"  report: {res.report_path}")
@@ -208,8 +216,16 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     s = sub.add_parser("sync", help="mirror brew.is catalog into BeerSmith")
+    s.add_argument("--brew-is-only", action="store_true",
+                   help="purge non-(brew.is) library rows so the library "
+                        "only shows what's actually buyable. Destructive — "
+                        "the existing rows go away (a backup is taken). "
+                        "Off by default since v0.1.3.")
+    # Backwards-compat shim: --keep-builtins was the opt-out in earlier
+    # versions when purge was the default. Now purge is opt-in, so this
+    # flag is a no-op, kept so older scripts and docs don't break.
     s.add_argument("--keep-builtins", action="store_true",
-                   help="don't purge non-(brew.is) library rows")
+                   help=argparse.SUPPRESS)
     s.set_defaults(func=cmd_sync)
 
     o = sub.add_parser("order", help="render shopping list for a recipe")

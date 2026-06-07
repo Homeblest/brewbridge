@@ -4,6 +4,31 @@ All notable changes to brewbridge. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] — 2026-06-07
+
+### Changed (breaking-ish)
+
+- **`brewbridge sync` is now non-destructive by default.** Previously the
+  first sync wiped every non-(brew.is) ingredient row, which silently
+  destroyed years of custom hop/yeast/grain entries for users coming
+  from an established BeerSmith setup. New default: keep all existing
+  library rows untouched, just add/refresh the (brew.is)-tagged ones.
+- New `brewbridge sync --brew-is-only` flag opts back into the
+  destructive mode for users who want their library to only show what's
+  buyable at brew.is. Backup is always taken first.
+- The old `--keep-builtins` flag is now a no-op (kept so scripts using
+  it don't break).
+
+### Added
+
+- README quickstart rewritten for non-Python users — 7-step walkthrough
+  from MSI download to first order, no jargon.
+
+### Fixed
+
+- Sync output now includes `deleted: N rows` line in brew.is-only mode
+  so the destructive action is unambiguous.
+
 ## [0.1.2] — 2026-06-07
 
 ### Added
