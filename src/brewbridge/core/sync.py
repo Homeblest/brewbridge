@@ -37,6 +37,28 @@ from . import orders
 
 DATA_DIR = Path.home() / ".brewbridge"
 REF_PATH = DATA_DIR / "specs_reference.json"
+LAST_SYNC_FILE = DATA_DIR / "last_sync.txt"
+
+
+def _record_sync_state(status: str) -> None:
+    """Persist the latest sync outcome to ``~/.brewbridge/last_sync.txt``.
+
+    The tray's icon-colour logic reads this file to render green/yellow/
+    red. Used to live only in tray.py — which meant CLI syncs (and any
+    future cron-driven sync) silently left the icon stuck on whatever
+    the LAST tray sync wrote, often "failed" from a long-ago crash. By
+    putting the write here, every sync — regardless of caller — keeps
+    the icon honest.
+
+    Format is ``<unix_timestamp>\\n<status>\\n`` where status is "ok"
+    or "failed". Same format the tray's ``_sync_state()`` reader
+    expects.
+    """
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    LAST_SYNC_FILE.write_text(
+        f"{dt.datetime.now().timestamp()}\n{status}\n",
+        encoding="utf-8",
+    )
 
 # Bundled fallback. Used when the user's library is already purged on
 # first sync (which happens to anyone who ran an earlier version of
@@ -245,7 +267,24 @@ def run(*, db_path: Path = bs.DEFAULT_DB_PATH, purge_builtins: bool = True,
     each run, keeping the library brew.is-only (best for a homebrewer whose
     only supplier is brew.is). If False, leaves built-in libraries intact and
     only manages the (brew.is)-tagged rows.
+
+    Always records sync outcome to ``~/.brewbridge/last_sync.txt`` — on
+    success ("ok") at the end, on any raised exception ("failed") via the
+    try/except wrapper. The tray's icon colour reads from that file, so
+    CLI and tray syncs both keep the icon honest.
     """
+    try:
+        return _run_inner(db_path=db_path, purge_builtins=purge_builtins,
+                          report_dir=report_dir)
+    except Exception:
+        _record_sync_state("failed")
+        raise
+
+
+def _run_inner(*, db_path: Path, purge_builtins: bool,
+                report_dir: Path | None) -> SyncResult:
+    """Actual sync implementation. Wrapped by ``run()`` which guarantees
+    last_sync.txt is updated whether we succeed or raise."""
     if bs.is_running():
         raise RuntimeError(
             "BeerSmith is running — close it before syncing. "
@@ -352,6 +391,7 @@ def run(*, db_path: Path = bs.DEFAULT_DB_PATH, purge_builtins: bool = True,
                 f.write(f"  - {name}\n")
         f.write(f"\nBackup: {backup}\n")
 
+    _record_sync_state("ok")
     return SyncResult(
         products=len(kept),
         inserted=inserted,

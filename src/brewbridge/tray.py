@@ -68,10 +68,13 @@ def _sync_state() -> str:
 
 
 def _record_sync(success: bool):
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    LAST_SYNC_FILE.write_text(
-        f"{dt.datetime.now().timestamp()}\n{'ok' if success else 'failed'}\n"
-    )
+    """Delegate to sync's own state-write so CLI and tray syncs both
+    keep last_sync.txt accurate. Kept as a thin wrapper so we don't
+    have to touch every existing call site, and so the failure path
+    (a sync.run that raised before its own _record_sync_state could
+    fire) is also covered."""
+    from brewbridge.core import sync
+    sync._record_sync_state("ok" if success else "failed")
 
 
 def _make_icon_image(state: str, size: int = 64):
