@@ -35,6 +35,7 @@ from typing import Callable
 # the case where tray.main is called as `brewbridge.tray.main()` from
 # __main__.py's cmd_tray.
 from brewbridge import __version__
+from brewbridge import _tray_log
 from brewbridge.core import beersmith as bs
 from brewbridge.core import platform as bb_platform
 
@@ -119,17 +120,42 @@ def _make_icon_image(state: str, size: int = 64):
 # Background worker — runs sync/audit without blocking the tray
 # ---------------------------------------------------------------------------
 
-def _run_in_thread(target: Callable[[], None], on_done: Callable[[bool], None] | None = None):
+def _run_in_thread(target: Callable[[], None], on_done: Callable[[bool], None] | None = None,
+                    label: str = "task"):
+    """Run ``target`` in a daemon thread, then call ``on_done(ok)``.
+
+    Exceptions are caught at *two* levels:
+
+      1. Inside ``target`` — sync, audit, etc. Logged to
+         ``~/.brewbridge/tray.log`` (the tray is a windowed PyInstaller
+         bundle with no stderr; the old ``traceback.print_exc()`` wrote
+         into the void and tracebacks vanished). ``on_done`` then runs
+         with ``ok=False``.
+
+      2. Inside ``on_done`` — the callback that updates the icon and
+         fires the notification. Previously unhandled, which meant a
+         buggy ``done(ok)`` killed the daemon thread *and* the tray
+         process visually. Now isolated: if the callback raises, the
+         exception goes to the same log file and the tray stays up.
+
+    ``label`` is used to tag log entries so they're attributable to a
+    specific callback (e.g. "sync", "audit").
+    """
     def wrap():
         ok = True
         try:
             target()
         except Exception:
-            import traceback
-            traceback.print_exc()
+            _tray_log.log_exception(label)
             ok = False
         if on_done:
-            on_done(ok)
+            try:
+                on_done(ok)
+            except Exception:
+                # A failing on_done used to kill the tray silently. Log
+                # and move on — the tray icon stays alive even if the
+                # post-sync notification path is broken.
+                _tray_log.log_exception(f"{label}/on_done")
     threading.Thread(target=wrap, daemon=True).start()
 
 
@@ -215,7 +241,13 @@ def _action_sync(icon):
         _record_sync(ok)
         icon.icon = _make_icon_image(_sync_state())
         if not ok:
-            icon.notify("Sync failed — check log.", "brewbridge")
+            # The underlying traceback is already in tray.log (see
+            # _run_in_thread). Point the user at it so they can paste
+            # it back to a maintainer.
+            icon.notify(
+                f"Sync failed — see {_tray_log.LOG_PATH}",
+                "brewbridge",
+            )
             return
         res = result_holder.get("res")
         if res is not None and res.unlocked:
@@ -231,7 +263,7 @@ def _action_sync(icon):
         else:
             icon.notify("Brew.is sync complete.", "brewbridge")
 
-    _run_in_thread(do_it, done)
+    _run_in_thread(do_it, done, label="sync")
 
 
 def _action_order(icon):
@@ -242,7 +274,7 @@ def _action_audit(icon):
     def do_it():
         from brewbridge.core import audit
         audit.run(fix=False)
-    _run_in_thread(do_it)
+    _run_in_thread(do_it, label="audit")
 
 
 def _action_open_folder(icon):
