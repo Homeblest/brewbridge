@@ -4,6 +4,24 @@ All notable changes to brewbridge. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.8] — 2026-06-08
+
+### Fixed
+
+- **No more cmd-window flash when clicking the order button.** Windows
+  was firing `brewbridge.exe` (built with `console=True` for terminal
+  output) as the `brewis://` URL handler, which made a console window
+  briefly pop up and close for every click. Added a sibling
+  `brewbridge-url.exe` (`console=False`, same code path) and pointed
+  the URL handler registration at it. The CLI `brewbridge.exe` stays
+  console-y for `brewbridge sync` etc. from a terminal. Tray's
+  internal subprocess calls also use the windowed sibling.
+
+  Effect: clicking the order button in BeerSmith now goes silently
+  from BeerSmith → brew.is form pre-filled, no flicker.
+
+  MSI grew slightly (~5 MB) for the additional binary.
+
 ## [0.1.7] — 2026-06-08
 
 ### Fixed

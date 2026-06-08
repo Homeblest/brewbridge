@@ -137,7 +137,29 @@ tray_exe = EXE(
     icon=ICON,
 )
 
-# --- single COLLECT pulling both EXEs + shared deps ---------------------
+# --- URL-handler EXE -----------------------------------------------------
+# Same code path as brewbridge.exe (shares cli_a) — only difference is
+# console=False so the Windows shell doesn't flash a cmd window when it
+# launches the binary in response to a brewis:// link being clicked.
+# CLI users still invoke brewbridge.exe (console=True) so `brewbridge
+# sync` etc print to their terminal normally. The URL handler
+# registration in setup.py:register_protocol points at brewbridge-url.exe.
+url_exe = EXE(
+    cli_pyz,
+    cli_a.scripts,
+    [],
+    exclude_binaries=True,
+    name="brewbridge-url",
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=False,
+    console=False,
+    disable_windowed_traceback=False,
+    icon=ICON,
+)
+
+# --- single COLLECT pulling all three EXEs + shared deps ---------------
 coll = COLLECT(
     cli_exe,
     cli_a.binaries,
@@ -147,6 +169,7 @@ coll = COLLECT(
     tray_a.binaries,
     tray_a.zipfiles,
     tray_a.datas,
+    url_exe,
     strip=False,
     upx=False,
     upx_exclude=[],

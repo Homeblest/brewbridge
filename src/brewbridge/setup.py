@@ -60,7 +60,14 @@ def register_protocol() -> str:
         import winreg
 
         if getattr(sys, "frozen", False):
-            cmd = f'"{sys.executable}" "%1"'
+            # Register the windowed sibling (brewbridge-url.exe) rather
+            # than brewbridge.exe so clicking a brewis:// link doesn't
+            # flash a cmd window. Both binaries are the same code path
+            # — only the PE subsystem differs. CLI users still use the
+            # console binary; the URL handler uses the windowed one.
+            url_exe = Path(sys.executable).parent / "brewbridge-url.exe"
+            target = str(url_exe) if url_exe.exists() else sys.executable
+            cmd = f'"{target}" "%1"'
         else:
             cmd = f'"{sys.executable}" -m brewbridge order "%1"'
         root = winreg.HKEY_CURRENT_USER

@@ -223,12 +223,22 @@ def _open_picker():
         # bare brewis:// URLs straight to the order subcommand, same as
         # the Windows URL handler does.
         if getattr(sys, "frozen", False):
-            cli = Path(sys.executable).parent / "brewbridge.exe"
+            # Prefer the windowed sibling so the picker spawn doesn't
+            # flash a cmd window. Falls back to the console binary if
+            # the windowed one's missing (e.g. dev override / partial
+            # install).
+            sibling = Path(sys.executable).parent / "brewbridge-url.exe"
+            cli = sibling if sibling.exists() else (
+                Path(sys.executable).parent / "brewbridge.exe")
             cmd = [str(cli), url]
+            # Console-suppression flag is redundant when the target is
+            # already windowed, but harmless and keeps the
+            # source-install fallback clean too.
+            flags = bb_platform.detached_console_flag()
         else:
             cmd = [sys.executable, "-m", "brewbridge", "order", url]
-        subprocess.Popen(cmd,
-                         creationflags=bb_platform.detached_console_flag())
+            flags = bb_platform.detached_console_flag()
+        subprocess.Popen(cmd, creationflags=flags)
         root.destroy()
 
     bar = ttk.Frame(root, padding=10)
