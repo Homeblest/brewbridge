@@ -4,6 +4,27 @@ All notable changes to brewbridge. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] — 2026-06-08
+
+### Fixed
+
+- **Icelandic toast wording was nonsense.** The verb stem "samrú-"
+  ("samrúmd" / "samrúmir" / "samrúmningur") doesn't exist in
+  Icelandic — I'd invented it as a translation of "sync." The 0.1.6
+  notifications used these made-up forms throughout. Now uses the
+  correct verb **uppfæra** ("to update") and the noun **uppfærsla**
+  ("an update"), which is what Icelandic software actually uses for
+  catalog refreshes. Also removed mixed English/Icelandic
+  ("Brew.is sync started…" / "Brew.is sync complete.") so the
+  notifications read consistently in one language.
+
+  New wording:
+    - Title (success): `brew.is uppfærsla — tókst`
+    - Title (failure): `brew.is uppfærsla — mistókst`
+    - Title (BeerSmith open): `brew.is uppfærsla — bíður eftir BeerSmith`
+    - Body (success): `112 hráefni á lager hjá brew.is, þar af 85 með nákvæm brugggildi.`
+    - Body (failure): `Uppfærsla mistókst: <reason>`
+
 ## [0.1.6] — 2026-06-08
 
 ### Added

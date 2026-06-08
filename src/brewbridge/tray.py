@@ -262,12 +262,12 @@ def _action_sync(icon):
     # is fast (~50 ms) so it's fine on the main thread.
     if bs.is_running():
         icon.notify(
-            "Vinsamlegast lokaðu BeerSmith áður en þú samrúmir. "
-            "BeerSmith heldur gagnagrunninum opnum og lokar fyrir uppfærslur.",
-            "brew.is sync — bíður eftir BeerSmith",
+            "Vinsamlegast lokaðu BeerSmith fyrst — annars er ekki "
+            "hægt að uppfæra vörulistann.",
+            "brew.is uppfærsla — bíður eftir BeerSmith",
         )
         return
-    icon.notify("Brew.is sync started...", "brewbridge")
+    icon.notify("Sæki vörulista frá brew.is…", "brewbridge")
     # The sync result needs to survive across threads — _run_in_thread
     # passes `ok` (bool) to the done callback but not the return value.
     # Stash it in a dict for the closure.
@@ -282,11 +282,9 @@ def _action_sync(icon):
         icon.icon = _make_icon_image(_sync_state())
         if err is not None:
             # Surface the actual reason in the toast. RuntimeError
-            # messages from sync.run() are already user-facing
-            # ("BeerSmith is running — close it before syncing.") so
-            # we use them verbatim, truncated to keep the toast body
-            # readable. Full traceback still goes to tray.log for
-            # the rare class of opaque errors.
+            # messages from sync.run() are already user-facing so we
+            # use them verbatim, truncated to keep the toast readable.
+            # Full traceback still goes to tray.log.
             reason = str(err).strip() or err.__class__.__name__
             # First sentence only — the explanation that follows is
             # already in the tray.log entry.
@@ -294,20 +292,20 @@ def _action_sync(icon):
             if len(short) > 140:
                 short = short[:137] + "…"
             icon.notify(
-                f"Sync failed: {short}",
-                "brew.is sync — mistókst",
+                f"Uppfærsla mistókst: {short}",
+                "brew.is uppfærsla — mistókst",
             )
             return
         res = result_holder.get("res")
         if res is None:
-            icon.notify("Brew.is sync complete.", "brewbridge")
+            icon.notify("Vörulisti uppfærður.", "brewbridge")
             return
         # Build a success message with concrete numbers — way more
         # informative than the old "Brew.is sync complete." stub.
-        # Format: "112 hráefni, 85 með stillingum" for the typical case.
+        # Format: "112 hráefni á lager, þar af 85 með nákvæm brugggildi."
         n_total = sum(res.inserted.values())
-        body = (f"{n_total} hráefni samrúmd, {res.matched} með stillingum "
-                f"af {res.products}.")
+        body = (f"{n_total} hráefni á lager hjá brew.is, þar af "
+                f"{res.matched} með nákvæm brugggildi.")
         if res.unlocked:
             # Top-3 names plus overflow indicator — keep the toast scannable.
             names = ", ".join(name for _, name in res.unlocked[:3])
@@ -315,10 +313,10 @@ def _action_sync(icon):
             tail = f" (+{extra})" if extra > 0 else ""
             icon.notify(
                 f"{body}\n\nNýjar uppskriftir tilbúnar: {names}{tail}",
-                "brew.is sync — pantanir mögulegar",
+                "brew.is uppfærsla — pantanir mögulegar",
             )
         else:
-            icon.notify(body, "brew.is sync — tókst")
+            icon.notify(body, "brew.is uppfærsla — tókst")
 
     _run_in_thread(do_it, done, label="sync")
 
