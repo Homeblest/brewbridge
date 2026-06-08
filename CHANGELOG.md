@@ -4,6 +4,28 @@ All notable changes to brewbridge. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.12] — 2026-06-08
+
+### Fixed
+
+- **Audit report no longer suggests `audit --fix` for issues it can't
+  fix.** The tray audit report footer always said "To auto-fix where
+  possible: brewbridge audit --fix" whenever any issues existed — even
+  when every issue was a COLOR or MATCH advisory that `--fix` does
+  nothing about. A user with 3 color-range warnings would run the
+  command and see it no-op, which is confusing.
+
+  Now the footer is conditional:
+  - `--fix` hint shown only when mash / yeast_date / yeast_attenuation
+    issues are present (the categories it actually fixes).
+  - COLOR / MATCH issues get an advisory note explaining they're
+    recipe-design / substitution decisions for the user to make, not
+    something automation resolves.
+
+  The CLI `brewbridge audit` footer had the same gap (its
+  auto-fixable count omitted yeast_attenuation and it didn't
+  distinguish advisory issues) — aligned both to the same logic.
+
 ## [0.1.11] — 2026-06-08
 
 ### Fixed

@@ -433,10 +433,34 @@ def _write_audit_report(res) -> "Path":
         for it in sorted(items, key=lambda x: (x.severity, x.recipe)):
             lines.append(f"  [{it.severity}] {it.recipe}: {it.message}")
         lines.append("")
-    if len(res.issues):
-        lines.append("To auto-fix where possible:")
+
+    # Only suggest `audit --fix` when there are issues it can actually
+    # fix. `--fix` handles mash rebuilds + yeast dates + yeast
+    # attenuation; it does NOTHING for `color` (out-of-style-range is a
+    # recipe-design decision: change the grain bill or retag the style)
+    # or `match` (a substitution/family-mismatch the user resolves in
+    # the order flow). Suggesting --fix for a color-only report sends
+    # the user to run a command that no-ops — exactly the misleading
+    # footer the user flagged.
+    fixable = {"mash", "yeast_date", "yeast_attenuation"}
+    has_fixable = any(c in fixable for c in by_cat)
+    advisory_only = {"color", "match"}
+    has_advisory = any(c in advisory_only for c in by_cat)
+
+    if has_fixable:
+        lines.append("To auto-fix the mash / yeast issues:")
         lines.append("  brewbridge audit --fix")
-        lines.append("(Closes BeerSmith required for the write step.)")
+        lines.append("(Close BeerSmith first — the fix writes to the database.)")
+    if has_advisory:
+        lines.append("")
+        lines.append(
+            "COLOR and MATCH issues are advisory — `audit --fix` can't "
+            "resolve them. They reflect recipe-design choices (a recipe "
+            "outside its style's colour range, or an ingredient whose "
+            "closest brew.is match is in a different family). Adjust the "
+            "grain bill, retag the style, or pick a substitute in the "
+            "order sheet — your call."
+        )
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return path
 

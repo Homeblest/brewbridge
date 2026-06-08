@@ -161,9 +161,20 @@ def cmd_audit(args):
         print(f"Rebound yeast attenuation in {res.yeast_attenuation_fixed} recipes")
         print(f"Rebuilt mash for {res.mashes_rebuilt} recipes")
     elif not args.fix:
-        n_auto = len(by_cat.get("yeast_date", [])) + len(by_cat.get("mash", []))
+        # Only point at --fix when issues it can actually fix are present.
+        # mash + yeast_date + yeast_attenuation are auto-fixable; color
+        # and match are advisory (recipe-design / substitution choices
+        # the user resolves themselves). Keep this set in sync with
+        # tray._write_audit_report.
+        fixable = ("mash", "yeast_date", "yeast_attenuation")
+        n_auto = sum(len(by_cat.get(c, [])) for c in fixable)
         if n_auto:
-            print(f"\n{n_auto} auto-fixable issues. Re-run with --fix.")
+            print(f"\n{n_auto} auto-fixable issues. Re-run with --fix "
+                  "(close BeerSmith first).")
+        advisory = sum(len(by_cat.get(c, [])) for c in ("color", "match"))
+        if advisory and not n_auto:
+            print(f"\n{advisory} advisory issue(s) — COLOR/MATCH can't be "
+                  "auto-fixed (recipe-design or substitution choices).")
 
 
 def cmd_install(args):
