@@ -123,21 +123,25 @@ def _make_icon_image(state: str, size: int = 64):
 # Background worker — runs sync/audit without blocking the tray
 # ---------------------------------------------------------------------------
 
-def _run_in_thread(target: Callable[[], None], on_done: Callable[[bool], None] | None = None,
+def _run_in_thread(target: Callable[[], None],
+                    on_done: Callable[[Exception | None], None] | None = None,
                     label: str = "task"):
-    """Run ``target`` in a daemon thread, then call ``on_done(ok)``.
+    """Run ``target`` in a daemon thread, then call ``on_done(err)``.
+
+    ``on_done`` receives the exception object on failure (or ``None`` on
+    success) so the callback can use ``str(err)`` for a user-facing
+    "reason" in its notification, rather than the old "Sync failed —
+    see tray.log" with no actionable detail. The traceback still goes
+    to ``~/.brewbridge/tray.log`` for diagnosis.
 
     Exceptions are caught at *two* levels:
 
-      1. Inside ``target`` — sync, audit, etc. Logged to
-         ``~/.brewbridge/tray.log`` (the tray is a windowed PyInstaller
-         bundle with no stderr; the old ``traceback.print_exc()`` wrote
-         into the void and tracebacks vanished). ``on_done`` then runs
-         with ``ok=False``.
+      1. Inside ``target`` — sync, audit, etc. Logged to tray.log.
+         on_done then runs with the exception (or None on success).
 
       2. Inside ``on_done`` — the callback that updates the icon and
          fires the notification. Previously unhandled, which meant a
-         buggy ``done(ok)`` killed the daemon thread *and* the tray
+         buggy callback killed the daemon thread *and* the tray
          process visually. Now isolated: if the callback raises, the
          exception goes to the same log file and the tray stays up.
 
@@ -145,15 +149,15 @@ def _run_in_thread(target: Callable[[], None], on_done: Callable[[bool], None] |
     specific callback (e.g. "sync", "audit").
     """
     def wrap():
-        ok = True
+        err: Exception | None = None
         try:
             target()
-        except Exception:
+        except Exception as e:
             _tray_log.log_exception(label)
-            ok = False
+            err = e
         if on_done:
             try:
-                on_done(ok)
+                on_done(err)
             except Exception:
                 # A failing on_done used to kill the tray silently. Log
                 # and move on — the tray icon stays alive even if the
@@ -273,31 +277,48 @@ def _action_sync(icon):
         from brewbridge.core import sync
         result_holder["res"] = sync.run()
 
-    def done(ok):
-        _record_sync(ok)
+    def done(err: Exception | None):
+        _record_sync(err is None)
         icon.icon = _make_icon_image(_sync_state())
-        if not ok:
-            # The underlying traceback is already in tray.log (see
-            # _run_in_thread). Point the user at it so they can paste
-            # it back to a maintainer.
+        if err is not None:
+            # Surface the actual reason in the toast. RuntimeError
+            # messages from sync.run() are already user-facing
+            # ("BeerSmith is running — close it before syncing.") so
+            # we use them verbatim, truncated to keep the toast body
+            # readable. Full traceback still goes to tray.log for
+            # the rare class of opaque errors.
+            reason = str(err).strip() or err.__class__.__name__
+            # First sentence only — the explanation that follows is
+            # already in the tray.log entry.
+            short = reason.split(".", 1)[0].strip()
+            if len(short) > 140:
+                short = short[:137] + "…"
             icon.notify(
-                f"Sync failed — see {_tray_log.LOG_PATH}",
-                "brewbridge",
+                f"Sync failed: {short}",
+                "brew.is sync — mistókst",
             )
             return
         res = result_holder.get("res")
-        if res is not None and res.unlocked:
-            # Top-3 names plus overflow indicator. pystray's notify body
-            # has limited width on every platform; keep it scannable.
+        if res is None:
+            icon.notify("Brew.is sync complete.", "brewbridge")
+            return
+        # Build a success message with concrete numbers — way more
+        # informative than the old "Brew.is sync complete." stub.
+        # Format: "112 hráefni, 85 með stillingum" for the typical case.
+        n_total = sum(res.inserted.values())
+        body = (f"{n_total} hráefni samrúmd, {res.matched} með stillingum "
+                f"af {res.products}.")
+        if res.unlocked:
+            # Top-3 names plus overflow indicator — keep the toast scannable.
             names = ", ".join(name for _, name in res.unlocked[:3])
             extra = len(res.unlocked) - 3
             tail = f" (+{extra})" if extra > 0 else ""
             icon.notify(
-                f"Nýjar uppskriftir tilbúnar í pöntun: {names}{tail}",
+                f"{body}\n\nNýjar uppskriftir tilbúnar: {names}{tail}",
                 "brew.is sync — pantanir mögulegar",
             )
         else:
-            icon.notify("Brew.is sync complete.", "brewbridge")
+            icon.notify(body, "brew.is sync — tókst")
 
     _run_in_thread(do_it, done, label="sync")
 

@@ -1,4 +1,4 @@
-﻿"""brewbridge — sync brew.is in-stock ingredients into BeerSmith 4 and order
+"""brewbridge — sync brew.is in-stock ingredients into BeerSmith 4 and order
 recipes via the /uppskriftir Recipe Machine.
 
 Public modules:
@@ -15,4 +15,4 @@ Entry points:
     `brewbridge`         — CLI (sync / order / recipes / audit / install)
     `brewbridge-tray`    — system-tray app
 """
-__version__ = "0.1.5"
+__version__ = "0.1.6"

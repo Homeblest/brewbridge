@@ -4,6 +4,31 @@ All notable changes to brewbridge. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] — 2026-06-08
+
+### Added
+
+- **Windows toast notifications now include the actual reason** when
+  sync fails, instead of the previous "Sync failed — see tray.log"
+  stub. Reason is the underlying exception message (e.g. "BeerSmith
+  is running — close it before syncing", or whatever the live error
+  was), truncated to a single sentence. Full traceback still goes
+  to `~/.brewbridge/tray.log` for diagnosis.
+
+- **Success notification now includes concrete numbers** instead of
+  the generic "Brew.is sync complete." stub. Format:
+  `112 hráefni samrúmd, 85 með stillingum af 112.` When recipes flip
+  from blocked → orderable, a second line names the top 3 with a
+  `(+N)` overflow indicator.
+
+### Changed
+
+- `_run_in_thread`'s `on_done` callback signature changed from
+  `Callable[[bool], None]` (success boolean) to
+  `Callable[[Exception | None], None]` so the callback has the
+  exception object to pull `str(err)` from. Internal API — no
+  external callers affected.
+
 ## [0.1.5] — 2026-06-07
 
 Tray UX polish — fixes two papercuts users hit immediately on their
