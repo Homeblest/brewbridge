@@ -39,11 +39,15 @@ def cmd_sync(args):
     print(f"\n  inserted: {sum(res.inserted.values())} rows "
           f"(grain {res.inserted['grain']}, hops {res.inserted['hops']}, "
           f"yeast {res.inserted['yeast']}, misc {res.inserted['misc']})")
-    if res.deleted:
-        # Make destructive runs unambiguous — the user passed --brew-is-only
-        # so this number is expected, but printing it removes the "wait, did
-        # something just disappear?" surprise.
-        print(f"  deleted:  {res.deleted} rows (brew.is-only mode)")
+    # Only report deletions when we actually purged the user's own
+    # ingredients (brew.is-only mode). In the default non-destructive
+    # mode, sync still deletes the PREVIOUS sync's (brew.is)-tagged rows
+    # before re-inserting the fresh set — that's internal churn, not
+    # something the user should see as "112 rows deleted" (which reads
+    # as data loss). Suppress it unless --brew-is-only was passed.
+    if res.deleted and args.brew_is_only:
+        print(f"  deleted:  {res.deleted} non-brew.is rows "
+              "(brew.is-only mode — your custom ingredients were purged)")
     print(f"  matched specs: {res.matched} / {res.products}")
     print(f"  backup: {res.backup}")
     print(f"  report: {res.report_path}")

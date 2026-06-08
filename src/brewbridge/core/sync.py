@@ -190,8 +190,50 @@ def _make_notes(product: dict, amount: tuple[float, str] | None,
     return " | ".join(parts)
 
 
+def _price_per_unit(t: str, price_isk, pack_amount) -> float:
+    """Convert a brew.is per-pack price (ISK) to BeerSmith's per-unit price.
+
+    BeerSmith stores weights internally in ounces and computes recipe
+    cost as ``amount(oz) × price``, so for weight-sold ingredients
+    (grain, hops) the price field must be **per ounce** for the native
+    cost calculator to produce a sensible total. Get this unit wrong and
+    recipe costs are off by 16× (oz↔lb) or 35× (oz↔kg) — the same class
+    of bug that bit the grain-weight import early on, so it's worth being
+    explicit.
+
+    Per type:
+      * grain / hops — weight-based → ISK per ounce.
+      * yeast        — sold and counted per packet (F_Y_AMOUNT is in
+                       packets), so the price is per packet as-is.
+      * misc         — F_M_AMOUNT units are too variable (weight / count /
+                       volume / tsp) to convert reliably; leave at 0 rather
+                       than risk a wildly wrong figure. The order sheet
+                       still shows misc costs from the raw per-pack price.
+
+    ``pack_amount`` is the ``(value, unit)`` tuple from
+    :func:`catalog.parse_pack_amount`, or ``None`` for loose-sold grain
+    (which brew.is prices per kg).
+    """
+    price = float(price_isk or 0)
+    if price <= 0:
+        return 0.0
+    if t == "yeast":
+        return price
+    if t == "misc":
+        return 0.0
+    # grain + hops: per-ounce.
+    if pack_amount:
+        value, unit = pack_amount
+        grams = value * (1000.0 if unit == "kg" else 1.0)
+    else:
+        # Loose-sold grain ("í lausu") — brew.is prices these per kg.
+        grams = 1000.0
+    oz = grams * bs.OZ_PER_G
+    return price / oz if oz else 0.0
+
+
 def _row_for(t: str, name: str, matched: dict | None, template: dict,
-             inv: float, note: str, now: str) -> dict:
+             inv: float, note: str, now: str, price: float = 0.0) -> dict:
     """Build a complete column dict for one managed ingredient row.
 
     Start from the column template (which has every real schema column
@@ -219,7 +261,7 @@ def _row_for(t: str, name: str, matched: dict | None, template: dict,
         row.update({
             "F_G_SUPPLIER": "brew.is",
             "F_G_INVENTORY": inv,
-            "F_G_PRICE": 0.0,
+            "F_G_PRICE": price,
             "F_G_AMOUNT": 0.0,
             "F_G_IN_RECIPE": 0,
             "F_G_NOTES": note,
@@ -227,7 +269,7 @@ def _row_for(t: str, name: str, matched: dict | None, template: dict,
     elif t == "hops":
         row.update({
             "F_H_INVENTORY": inv,
-            "F_H_PRICE": 0.0,
+            "F_H_PRICE": price,
             "F_H_AMOUNT": 0.0,
             "F_H_IN_RECIPE": 0,
             "F_H_NOTES": note,
@@ -237,7 +279,7 @@ def _row_for(t: str, name: str, matched: dict | None, template: dict,
         now_int = int(dt.datetime.now().timestamp())
         row.update({
             "F_Y_INVENTORY": inv,
-            "F_Y_PRICE": 0.0,
+            "F_Y_PRICE": price,
             "F_Y_AMOUNT": 0.0,
             "F_Y_IN_RECIPE": 0,
             "F_Y_NOTES": note,
@@ -343,8 +385,9 @@ def _run_inner(*, db_path: Path, purge_builtins: bool,
         note = _make_notes(p, amount, matched_name, score)
         # inventory = 1.0 as a presence flag; real stock count lives in the note
         display_name = (base.strip() or p["name"].strip()) + bs.TAG
+        price_per_unit = _price_per_unit(t, p.get("price"), amount)
         rows[t].append(_row_for(t, display_name, prod, templates[t],
-                                 1.0, note, now_s))
+                                 1.0, note, now_s, price_per_unit))
 
     backup = bs.backup_db(db_path)
     cur = conn.cursor()

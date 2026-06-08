@@ -4,6 +4,40 @@ All notable changes to brewbridge. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.13] — 2026-06-08
+
+### Added
+
+- **Real brew.is prices in BeerSmith's native recipe-cost calculator.**
+  Every brew.is product carries an ISK price that brewbridge parsed
+  but then discarded — library rows were written with `F_G_PRICE: 0.0`,
+  leaving BeerSmith's built-in cost calculator showing "0 kr" for
+  every recipe. Now the per-pack price is converted to BeerSmith's
+  per-unit model and written to the library, so BeerSmith natively
+  shows batch cost, cost-per-litre, and cost-per-bottle with no
+  brewbridge UI involved.
+
+  Conversion (`sync._price_per_unit`):
+  - grain / hops → ISK per ounce (BeerSmith stores weight in oz and
+    computes cost as amount × price; per-oz is the only unit that
+    makes the multiplication come out right).
+  - yeast → ISK per packet (F_Y_AMOUNT is in packets).
+  - misc → left at 0; F_M_AMOUNT units are too variable (weight /
+    count / volume / tsp) to convert without risking a wildly wrong
+    figure. The order sheet still shows misc costs from the raw
+    per-pack price.
+
+  8 tests in test_price.py pin the arithmetic, including a round-trip
+  check that "one pack's worth of grain costs ≈ the pack price."
+
+### Notes
+
+- Inventory volumes (showing real brew.is stock counts in BeerSmith's
+  inventory view) are partially feasible — accurate for packaged goods
+  (hops, yeast, packaged grain: stock = package_count × pack_size) but
+  not for loose-sold grain, where brew.is's `quantity` field is an
+  opaque count we can't convert to a weight. Deferred.
+
 ## [0.1.12] — 2026-06-08
 
 ### Fixed
