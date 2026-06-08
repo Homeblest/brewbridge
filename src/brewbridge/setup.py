@@ -321,8 +321,11 @@ def install_scheduled_task(at: str = "06:00") -> str:
     ]
     # capture output so we can include the schtasks error in any
     # RuntimeError we raise; otherwise it'd just hit stderr and vanish
-    # in a frozen-bundle context.
-    proc = subprocess.run(args, capture_output=True, text=True)
+    # in a frozen-bundle context. creationflags=no_window_flag silences
+    # the cmd flash schtasks would otherwise show.
+    from .core import platform as bb_platform
+    proc = subprocess.run(args, capture_output=True, text=True,
+                           creationflags=bb_platform.no_window_flag())
     if proc.returncode != 0:
         # Don't fail the whole install over the schedule — the rest of
         # the setup (protocol handler, report template, profiles) is
@@ -339,8 +342,10 @@ def uninstall_scheduled_task() -> None:
     if sys.platform != "win32":
         return
     import subprocess
+    from .core import platform as bb_platform
     subprocess.run(["schtasks", "/Delete", "/F", "/TN", SCHEDULED_TASK_NAME],
-                    capture_output=True)
+                    capture_output=True,
+                    creationflags=bb_platform.no_window_flag())
 
 
 def install_chromium() -> str:

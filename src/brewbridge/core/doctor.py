@@ -208,6 +208,7 @@ def _check_scheduled_task() -> Check:
     proc = subprocess.run(
         ["schtasks", "/Query", "/TN", SCHEDULED_TASK_NAME, "/FO", "LIST"],
         capture_output=True, text=True,
+        creationflags=bb_platform.no_window_flag(),
     )
     if proc.returncode == 0:
         # Try to extract the schedule line; output format is

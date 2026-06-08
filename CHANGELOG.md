@@ -4,6 +4,31 @@ All notable changes to brewbridge. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] — 2026-06-08
+
+### Fixed
+
+- **Two more cmd flashes during sync, now eliminated.** Every `brewbridge
+  sync` was briefly showing two cmd windows in quick succession.
+  Source: `bs.is_running()` shells out to `tasklist` to check whether
+  BeerSmith is open, and the tray's `_action_sync` calls it twice per
+  click (once as a pre-flight on the main thread, once again inside
+  the background sync.run for belt-and-suspenders). Without
+  `CREATE_NO_WINDOW`, Windows makes a visible console for each
+  `tasklist` subprocess.
+- Added a `no_window_flag()` helper in `core/platform.py` alongside
+  the existing `detached_console_flag()`. Applied to **every** Windows
+  subprocess invocation in the codebase: `tasklist` in
+  `bs.is_running()`, `schtasks` calls in `setup.install_scheduled_task`
+  / `uninstall_scheduled_task`, the `schtasks /Query` in
+  `doctor._check_scheduled_task`, and the tray picker's brewbridge-url
+  spawn (which is windowed anyway but `CREATE_NO_WINDOW` is the
+  semantically correct flag there).
+
+Effect: a tray-driven sync now happens completely silently — no
+flashes anywhere. Same for `brewbridge doctor` and `brewbridge
+install`.
+
 ## [0.1.8] — 2026-06-08
 
 ### Fixed

@@ -133,17 +133,28 @@ def open_path(path: Path | str) -> None:
 # ---------------------------------------------------------------------------
 
 def detached_console_flag() -> int:
-    """Return the subprocess `creationflags` value for spawning a child
+    """Return the subprocess ``creationflags`` value for spawning a child
     in a detached console.
 
-    On Windows we want ``CREATE_NEW_CONSOLE`` so the tray-launched
-    ``brewbridge order`` command gets its own visible window with the
-    output. On other platforms the concept doesn't exist — return 0 so
-    ``subprocess.Popen(..., creationflags=detached_console_flag())``
-    works uniformly."""
+    On Windows: ``CREATE_NEW_CONSOLE``. On other platforms: 0.
+    Used when we explicitly want the child to have a visible console
+    (rare — most callers want :func:`no_window_flag` instead)."""
     if is_windows():
-        # Import locally — subprocess.CREATE_NEW_CONSOLE exists at attr
-        # level on every Python but is a Windows-only constant flagged
-        # by some linters as unavailable on Linux/mac.
         return getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+    return 0
+
+
+def no_window_flag() -> int:
+    """Return the subprocess ``creationflags`` value for spawning a child
+    that should NOT create a console window.
+
+    On Windows: ``CREATE_NO_WINDOW`` (0x08000000). On other platforms: 0.
+
+    Use for short-lived system tools like ``tasklist`` / ``schtasks`` /
+    ``reg`` that brewbridge calls programmatically. Without this flag,
+    every invocation flashes a cmd window briefly — visible during e.g.
+    a tray sync because ``bs.is_running()`` shells out to ``tasklist``
+    on the main thread before spawning the background sync."""
+    if is_windows():
+        return getattr(subprocess, "CREATE_NO_WINDOW", 0)
     return 0

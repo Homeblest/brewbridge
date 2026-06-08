@@ -231,11 +231,13 @@ def _open_picker():
             cli = sibling if sibling.exists() else (
                 Path(sys.executable).parent / "brewbridge.exe")
             cmd = [str(cli), url]
-            # Console-suppression flag is redundant when the target is
-            # already windowed, but harmless and keeps the
-            # source-install fallback clean too.
-            flags = bb_platform.detached_console_flag()
+            # Target is windowed (brewbridge-url.exe) — use
+            # CREATE_NO_WINDOW so no console is created at all.
+            flags = bb_platform.no_window_flag()
         else:
+            # Source install: spawning `python -m brewbridge order …`.
+            # python.exe is console=True, so use CREATE_NEW_CONSOLE
+            # to detach into its own visible window for dev visibility.
             cmd = [sys.executable, "-m", "brewbridge", "order", url]
             flags = bb_platform.detached_console_flag()
         subprocess.Popen(cmd, creationflags=flags)

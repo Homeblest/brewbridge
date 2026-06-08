@@ -99,8 +99,15 @@ def is_running() -> bool:
     """
     try:
         if bb_platform.is_windows():
+            # creationflags=no_window_flag() suppresses the cmd window
+            # that would otherwise flash for every invocation. The tray
+            # calls is_running() twice per Synca núna click (once as a
+            # pre-flight check, once inside sync.run()), so this flag
+            # turns "two visible flashes per sync" into zero.
             out = subprocess.run(
-                ["tasklist"], capture_output=True, text=True, timeout=20
+                ["tasklist"],
+                capture_output=True, text=True, timeout=20,
+                creationflags=bb_platform.no_window_flag(),
             ).stdout.lower()
             return "beersmith" in out
         # macOS + Linux: pgrep -i is the portable POSIX path. Exit code 0
