@@ -4,6 +4,28 @@ All notable changes to brewbridge. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.10] — 2026-06-08
+
+### Fixed
+
+- **"Yfirfara uppskriftir" did nothing visible.** The menu item kicked
+  off the recipe-audit checks in a background thread and silently
+  discarded the result. From the user's perspective: click, nothing
+  happens. Now writes a human-readable report to
+  `~/.brewbridge/audits/audit_<ts>.txt` (format mirrors the CLI's
+  `brewbridge audit` output), fires a toast summarising counts:
+
+      brewbridge — yfirferð uppskrifta
+      22 uppskriftir yfirfarnar — engin vandamál.
+
+  Or, when issues are found:
+
+      22 uppskriftir, 3 vandamál (2 mash, 1 yeast_date).
+      Yfirlit opnað í ritli.
+
+  …and opens the report file in the user's default text editor so
+  they actually read the detail.
+
 ## [0.1.9] — 2026-06-08
 
 ### Fixed

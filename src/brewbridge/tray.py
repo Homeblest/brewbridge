@@ -338,10 +338,107 @@ def _action_order(icon):
 
 
 def _action_audit(icon):
+    """Run the recipe-audit checks and surface the results.
+
+    Was previously a quiet no-op from the user's perspective — kicked
+    off the audit in a background thread and silently discarded the
+    AuditResult. From the tray the user just saw "nothing happened."
+
+    Now writes a human-readable report to ~/.brewbridge/audits/, fires
+    a toast summarising what was found, and opens the report file in
+    the user's default text viewer when there are issues to look at.
+    Clean reports just get the toast — no need to bother the user with
+    a "no problems" file.
+    """
+    result_holder: dict = {}
+
     def do_it():
         from brewbridge.core import audit
-        audit.run(fix=False)
-    _run_in_thread(do_it, label="audit")
+        result_holder["res"] = audit.run(fix=False)
+
+    def done(err: Exception | None):
+        if err is not None:
+            reason = str(err).strip() or err.__class__.__name__
+            short = reason.split(".", 1)[0].strip()
+            if len(short) > 140:
+                short = short[:137] + "…"
+            icon.notify(
+                f"Yfirferð mistókst: {short}",
+                "brewbridge — yfirferð uppskrifta",
+            )
+            return
+        res = result_holder.get("res")
+        if res is None:
+            icon.notify("Yfirferð kláruð.", "brewbridge")
+            return
+        n_issues = len(res.issues)
+        if n_issues == 0:
+            icon.notify(
+                f"{res.recipes_checked} uppskriftir yfirfarnar — "
+                "engin vandamál.",
+                "brewbridge — yfirferð uppskrifta",
+            )
+            return
+        # Write report + open it. The report has the full per-issue
+        # detail; the toast just gives the user the headline + a
+        # nudge toward the file they should read.
+        report = _write_audit_report(res)
+        by_cat: dict[str, int] = {}
+        for it in res.issues:
+            by_cat[it.category] = by_cat.get(it.category, 0) + 1
+        breakdown = ", ".join(
+            f"{n} {c}" for c, n in sorted(by_cat.items())
+        )
+        icon.notify(
+            f"{res.recipes_checked} uppskriftir, {n_issues} vandamál "
+            f"({breakdown}). Yfirlit opnað í ritli.",
+            "brewbridge — yfirferð uppskrifta",
+        )
+        # Open in default text editor so the user actually sees the
+        # detail without having to dig for the path.
+        try:
+            bb_platform.open_path(report)
+        except Exception:
+            _tray_log.log_exception("audit/open_report")
+
+    _run_in_thread(do_it, done, label="audit")
+
+
+def _write_audit_report(res) -> "Path":
+    """Render the AuditResult as a plain-text report file under
+    ~/.brewbridge/audits/, return the path. Format mirrors the CLI's
+    `brewbridge audit` output so users familiar with one recognise
+    the other."""
+    import datetime as dt
+
+    out_dir = DATA_DIR / "audits"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"audit_{dt.datetime.now():%Y%m%d_%H%M%S}.txt"
+
+    lines: list[str] = [
+        f"brewbridge audit — {dt.datetime.now():%Y-%m-%d %H:%M:%S}",
+        f"Recipes checked: {res.recipes_checked}",
+        f"Issues found:    {len(res.issues)}",
+        "",
+    ]
+    by_cat: dict[str, list] = {}
+    for it in res.issues:
+        by_cat.setdefault(it.category, []).append(it)
+    # Stable category order so successive reports diff cleanly.
+    for cat in ("mash", "match", "yeast_date", "color"):
+        items = by_cat.get(cat, [])
+        if not items:
+            continue
+        lines.append(f"--- {cat.upper()} ({len(items)}) ---")
+        for it in sorted(items, key=lambda x: (x.severity, x.recipe)):
+            lines.append(f"  [{it.severity}] {it.recipe}: {it.message}")
+        lines.append("")
+    if len(res.issues):
+        lines.append("To auto-fix where possible:")
+        lines.append("  brewbridge audit --fix")
+        lines.append("(Closes BeerSmith required for the write step.)")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
 
 
 def _action_open_folder(icon):
