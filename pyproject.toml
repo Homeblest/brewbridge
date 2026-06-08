@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "brewbridge"
-version = "0.1.10"
+version = "0.1.11"
 description = "Sync brew.is in-stock ingredients into BeerSmith 4, import recipes, and fill the /uppskriftir Recipe Machine in one click."
 readme = "README.md"
 license = { file = "LICENSE" }

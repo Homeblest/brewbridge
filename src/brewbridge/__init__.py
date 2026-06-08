@@ -15,4 +15,4 @@ Entry points:
     `brewbridge`         — CLI (sync / order / recipes / audit / install)
     `brewbridge-tray`    — system-tray app
 """
-__version__ = "0.1.10"
+__version__ = "0.1.11"

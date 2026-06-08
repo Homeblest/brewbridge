@@ -4,6 +4,33 @@ All notable changes to brewbridge. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.11] — 2026-06-08
+
+### Fixed
+
+- **Audit was flagging brewbridge's own mash format as a problem.**
+  Every imported brew.is recipe (22 of them) generated an `INFO`
+  "non-standard mash JSON" issue, because `_audit_mash` ran
+  `json.loads` on the F_R_MASH blob — and that blob deliberately uses
+  the BeerSmith-native format with unescaped inner quotes in the
+  `steps` field (see core/beersmith.py format quirks; standard JSON
+  refuses to parse it, BeerSmith's reader is the only thing that does).
+
+  Rewrote `_audit_mash` to extract the two fields it actually checks
+  (`F_MH_GRAIN_WEIGHT` > 0 and at least one mash step present) via
+  regex instead of `json.loads`. Genuine problems (no grain weight,
+  empty steps) are still flagged as CRIT — only the parser-pickiness
+  noise is gone. 22 false-positive issues drop to 0 on a typical
+  audit.
+
+  5 new tests in `test_audit_mash.py` pin the contract:
+  - native BeerSmith format passes without issues
+  - missing F_R_MASH content → CRIT
+  - zero grain weight → CRIT
+  - empty steps array → CRIT
+  - tolerates both quoted and bare-numeric forms for the grain
+    weight field
+
 ## [0.1.10] — 2026-06-08
 
 ### Fixed

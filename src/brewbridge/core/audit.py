@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import re
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -153,25 +154,39 @@ def _audit_matches(name: str, ings: list[dict], catalog: dict) -> list[Issue]:
 
 
 def _audit_mash(name: str, mash_json: str | None) -> list[Issue]:
+    """Check a recipe's F_R_MASH blob has real content.
+
+    Two checks: F_MH_GRAIN_WEIGHT > 0, and at least one mash step
+    present. Both go via regex extraction rather than json.loads
+    because BeerSmith's native mash format embeds the steps array as
+    a string with unescaped inner quotes — invalid by JSON spec, the
+    only shape BeerSmith's reader accepts. We deliberately WRITE this
+    format ourselves (see core/beersmith.py format quirks), so flagging
+    it as "non-standard mash JSON" the way an earlier version did was
+    20+ false-positive INFO entries per audit. Regex bypasses the
+    parser entirely and the checks still catch genuinely-broken
+    mash data (missing grain weight, no steps)."""
     out: list[Issue] = []
     if not mash_json:
         out.append(Issue(name, "CRIT", "mash", "no F_R_MASH content"))
         return out
-    try:
-        m = json.loads(mash_json)
-        steps_raw = m.get("steps", "[]")
-        steps = json.loads(steps_raw) if isinstance(steps_raw, str) else (steps_raw or [])
-        grain_wt = mm._f(m.get("F_MH_GRAIN_WEIGHT")) or 0
-        if grain_wt <= 0:
-            out.append(Issue(name, "CRIT", "mash",
-                f"mash grain weight is {grain_wt} oz"))
-        if not steps:
-            out.append(Issue(name, "CRIT", "mash", "no mash steps"))
-    except (json.JSONDecodeError, TypeError) as e:
-        # BeerSmith's native mash uses non-standard JSON (unescaped inner
-        # quotes); a parse error here usually means the recipe is actually OK
-        # in BeerSmith's eyes — we report INFO so the user knows.
-        out.append(Issue(name, "INFO", "mash", f"non-standard mash JSON ({e})"))
+
+    # Grain weight: tolerate both quoted ("160.0000000") and bare
+    # numeric (160.0) forms. BeerSmith uses quoted; tests / external
+    # writers might use bare.
+    gw_match = re.search(r'"F_MH_GRAIN_WEIGHT"\s*:\s*"?([0-9.+-]+)"?',
+                          mash_json)
+    grain_wt = float(gw_match.group(1)) if gw_match else 0.0
+    # Steps array presence: any "F_MS_NAME":"<something>" pattern
+    # indicates at least one mash step. The exact contents are
+    # BeerSmith's problem to parse.
+    has_steps = bool(re.search(r'"F_MS_NAME"\s*:\s*"[^"]+"', mash_json))
+
+    if grain_wt <= 0:
+        out.append(Issue(name, "CRIT", "mash",
+                          f"mash grain weight is {grain_wt} oz"))
+    if not has_steps:
+        out.append(Issue(name, "CRIT", "mash", "no mash steps"))
     return out
 
 
