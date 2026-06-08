@@ -34,12 +34,28 @@ from . import matching as mm
 
 UPPSKRIFTIR_URL = "https://www.brew.is/uppskriftir"
 
-# Pantry items — assumed-on-hand household goods that brew.is doesn't sell.
+# Pantry items — assumed-on-hand household / commonly-stocked goods that a
+# brewer typically already has, so they should never block a brew.is order.
+# Shown in the order sheet's "Úr eldhúsi" (from the kitchen) section rather
+# than as a buyable line or a blocker.
+#
+# Two groups:
+#   * table sugars (sucrose) — everyone has these.
+#   * priming / corn sugars (dextrose) — the canonical priming sugar a
+#     homebrewer keeps a bag of. brew.is does stock "Dextrósi" but most
+#     brewers prime from their own supply; treating it as pantry means a
+#     recipe that calls for a little dextrose isn't blocked or pushed into
+#     the cart. (A brewer who genuinely wants to buy brew.is dextrose can
+#     still add it manually on the brew.is site.)
 PANTRY_KEYWORDS = (
+    # table sugar / sucrose
     "sugar, table", "table sugar", "sucrose", "white sugar", "cane sugar",
     "beet sugar", "granulated sugar",
     "hvítur sykur", "hvitur sykur", "borðsykur", "bordsykur",
     "venjulegur sykur", "strásykur", "strasykur",
+    # dextrose / corn / priming sugar
+    "dextrose", "corn sugar", "priming sugar", "dextrósi", "dextrosi",
+    "þrúgusykur", "thrugusykur",
 )
 
 

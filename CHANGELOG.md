@@ -4,6 +4,29 @@ All notable changes to brewbridge. Format roughly follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.14] — 2026-06-08
+
+### Fixed
+
+- **Dextrose / corn / priming sugar no longer blocks an otherwise-complete
+  order.** A recipe calling for a little dextrose (e.g. 120 g priming
+  sugar) had the whole order blocked — "ekki til hjá brew.is, engin
+  hentug staðganga" — even when all the actual brewing ingredients were
+  in stock and the brewer had dextrose on the shelf at home. Added
+  dextrose / corn sugar / priming sugar (+ Icelandic dextrósi /
+  þrúgusykur) to the pantry list, joining table sugar. Pantry items
+  show in the order sheet's "Úr eldhúsi" (from the kitchen) section,
+  never block the order, and aren't added to the cart.
+
+  (brew.is does stock Dextrósi, but priming sugar is something most
+  homebrewers supply themselves — treating it as pantry means a recipe
+  that calls for a touch of dextrose isn't held hostage to it. A brewer
+  who does want to buy brew.is dextrose can still add it manually.)
+
+  17 tests in test_pantry.py pin the behaviour: dextrose family is
+  pantry, table sugars still pantry, real ingredients (malts, hops,
+  specialty candi sugar) are not, and pantry is grain-only.
+
 ## [0.1.13] — 2026-06-08
 
 ### Added
